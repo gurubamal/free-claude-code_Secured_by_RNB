@@ -4,6 +4,12 @@ A local gateway for coding assistants, maintained as the **RNB hardening fork**.
 
 This repository builds on an existing MIT-licensed project; the upstream source and license are credited below. This guide describes the RNB version and its changes.
 
+## Documentation
+
+- [README](https://github.com/gurubamal/free-claude-code_Secured_by_RNB/blob/main/README.md): features, setup, paid switches and actual provider/model display.
+- [Routing guide](https://github.com/gurubamal/free-claude-code_Secured_by_RNB/blob/main/FREE_ROUTING.md): provider support, priorities, automatic fallback, cooldowns and the 512k minimum.
+- [Illustrated Admin guide](https://github.com/gurubamal/free-claude-code_Secured_by_RNB/blob/main/docs/ADMIN_GUIDE.md): the three supplied screenshots and control instructions.
+
 ## RNB changes
 
 | Area | Implemented in this fork |
