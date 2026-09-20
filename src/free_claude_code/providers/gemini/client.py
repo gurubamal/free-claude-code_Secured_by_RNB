@@ -9,6 +9,7 @@ from free_claude_code.providers.google_openai import (
     validate_google_extra_body,
 )
 from free_claude_code.providers.openai_chat import (
+    OpenAIAsyncCredentialProvider,
     OpenAIChatProfile,
     OpenAIChatRequestPolicy,
 )
@@ -33,10 +34,17 @@ class GeminiProvider(GoogleOpenAIProvider):
     """Gemini API using ``https://generativelanguage.googleapis.com/v1beta/openai/``."""
 
     def __init__(
-        self, config: ProviderConfig, *, admission: ProviderAdmissionController
+        self,
+        config: ProviderConfig,
+        *,
+        admission: ProviderAdmissionController,
+        api_key_provider: OpenAIAsyncCredentialProvider | None = None,
+        default_headers: dict[str, str] | None = None,
     ):
         super().__init__(
             config,
             profile=_PROFILE,
             admission=admission,
+            api_key_provider=api_key_provider,
+            default_headers=default_headers,
         )

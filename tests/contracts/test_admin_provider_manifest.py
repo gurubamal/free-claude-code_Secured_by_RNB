@@ -183,13 +183,13 @@ def test_cline_pass_admin_fields_use_programmatic_key_and_fixed_endpoint() -> No
     assert key.settings_attr == "cline_api_key"
     assert key.section_id == "providers"
     assert key.secret is True
-    assert "Subscribe to ClinePass" in key.description
+    assert "Create a programmatic API key" in key.description
     assert "Settings > API Keys" in key.description
     assert "not the Cline CLI's managed account token" in key.description
     assert proxy.settings_attr == "cline_pass_proxy"
     assert proxy.secret is True
     assert "CLINE_BASE_URL" not in FIELD_BY_KEY
-    assert status["display_name"] == "ClinePass"
+    assert status["display_name"] == "Cline API / ClinePass"
     assert status["status"] == "configured"
 
 

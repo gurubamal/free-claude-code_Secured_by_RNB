@@ -3,6 +3,7 @@
     "production server startup",
     "authenticated Anthropic-to-OpenAI synthetic provider roundtrip",
     "Chrome first login, mandatory change and full Admin render",
+    "Chrome Google OAuth setup, protected secret, Google sign-in URL and cancellation (no Google account used)",
     "Chrome connected OpenAI catalog count and paid-access control link (synthetic state)",
     "Chrome route identity and timed refresh, 512k+ display, acknowledgments, paid switches, provider reordering, exclusions and saving (synthetic API fixtures)",
     "Chrome existing password change and sign-out",

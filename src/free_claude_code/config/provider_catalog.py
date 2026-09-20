@@ -205,6 +205,14 @@ PROVIDER_CATALOG: dict[str, ProviderDescriptor] = {
         default_base_url=OPENAI_CODEX_DEFAULT_BASE,
         proxy_attr="openai_proxy",
     ),
+    "gemini_oauth": ProviderDescriptor(
+        provider_id="gemini_oauth",
+        display_name="Gemini / Google account",
+        website_url="https://ai.google.dev/gemini-api/docs/oauth",
+        logo_filename="gemini-color.svg",
+        auth_kind=ProviderAuthKind.CONNECTED_ACCOUNT,
+        default_base_url=GEMINI_DEFAULT_BASE,
+    ),
     "github_copilot": ProviderDescriptor(
         provider_id="github_copilot",
         display_name="GitHub Copilot",

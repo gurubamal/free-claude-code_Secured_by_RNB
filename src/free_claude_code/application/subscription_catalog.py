@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 from dataclasses import replace
 
-from free_claude_code.config.free_providers import SUBSCRIPTION_PROVIDERS
+from free_claude_code.config.free_providers import CONNECTED_ROUTING_PROVIDERS
 
 
 class SubscriptionCatalog:
@@ -13,7 +13,7 @@ class SubscriptionCatalog:
 
     async def identities(self):
         result = {}
-        for policy in SUBSCRIPTION_PROVIDERS:
+        for policy in CONNECTED_ROUTING_PROVIDERS:
             try:
                 async with asyncio.timeout(25):
                     status = await self.services.admin.connected_account_status(
@@ -21,7 +21,7 @@ class SubscriptionCatalog:
                     )
                 if status.connected:
                     # Account identity/revision only; never inspect or export access tokens.
-                    identity = f"{status.email or ''}:{status.revision}"
+                    identity = f"{status.email or status.display_identity or ''}:{status.revision}"
                     result[policy.provider_id] = hashlib.sha256(
                         identity.encode()
                     ).hexdigest()

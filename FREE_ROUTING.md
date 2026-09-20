@@ -40,6 +40,7 @@ Providers outside these tables remain outside automatic routing. Catalog visibil
 | Additional provider | Required opt-in and interface scope | Primary reference |
 | --- | --- | --- |
 | DeepSeek | Paid API; existing native adapter in automatic selection | [DeepSeek API](https://api-docs.deepseek.com/api/create-chat-completion/) |
+| Gemini / Google account | Paid-API opt-in; your own Desktop OAuth client and Cloud project; Messages/Responses/Chat, renewable browser login; same 512k floor | [OAuth setup](docs/GOOGLE_ACCOUNT.md), [Google OAuth](https://ai.google.dev/gemini-api/docs/oauth) |
 | Cline API / ClinePass | Paid API; API key and documented `/models` + Chat endpoints; internal provider ID remains `cline_pass` | [Cline API](https://docs.cline.bot/api/overview) |
 | Command Code | Paid API; `https://api.commandcode.ai/provider/v1`; only catalog entries explicitly supporting `/chat/completions`. Anthropic-only entries are excluded. | [Provider API](https://commandcode.ai/blog/command-code-provider-api) |
 | Kimchi | Paid API; `https://llm.kimchi.dev/openai/v1`; missing context/tool metadata excludes models | [Quickstart](https://docs.kimchi.dev/docs/inference-quickstart) |
@@ -54,6 +55,10 @@ Local discovery does not install, download or load a new model. A server exposin
 
 ## Selection and failures
 
+Google OAuth uses the public Gemini API with its native, authenticated model catalog. The input-token limit comes from Google; exact model-ID registry matches supply omitted tool metadata. Native discovery is limited to 20 pages and 4 MiB per page, with the pool's 25-second provider deadline still applying. Login alone does not establish free billing, so this route requires the paid-API switch even when the chosen project has free quota. It does not use Gemini CLI tokens or consumer-subscription allowances.
+
+Saving Cline or Command Code credentials is separate from verifying them. Their public catalogs cannot prove key validity; Admin now explains that a real inference request is needed when no supported read-only credential probe exists.
+
 - Catalog cache: five minutes; credentials, account acknowledgments and billing-switch changes invalidate it. Explicit refresh does not reset quota.
 - Bounded discovery: eight pages per catalog, 16 MiB per response, 25 seconds per provider, four concurrent provider discovery operations. Catalog metadata has a 12-second fetch deadline.
 - Request fit: conservative UTF-8 byte estimate plus capped output; no history truncation. A provider tokenizer can still reject a request. Such a failure is handled before output when possible.
@@ -63,7 +68,7 @@ Local discovery does not install, download or load a new model. A server exposin
 - Cooldowns persist across daemon restarts and are scoped to the provider credential. Changing a key is not a way to reset an account quota.
 - Fallback stops as soon as output has been emitted. Interrupted streams return an error, without replaying a possibly executed tool call. Clients must preserve sessions and resume after capacity returns.
 
-The alias remains `open_router/openrouter/free` for launcher compatibility; explicit paid opt-ins may route it to paid models. Client names and manual fallback lists do not override automatic selection. Responses supports streaming only. Chat Completions excludes connected subscriptions and uses API-key/local routes; Messages and Responses can use eligible subscriptions. Existing harnesses remain responsible for tool execution and session persistence.
+The alias remains `open_router/openrouter/free` for launcher compatibility; explicit paid opt-ins may route it to paid models. Client names and manual fallback lists do not override automatic selection. Responses supports streaming only. Chat Completions excludes connected subscriptions and supports API-key/local routes plus Gemini API OAuth; Messages and Responses can also use eligible subscriptions. Existing harnesses remain responsible for tool execution and session persistence.
 
 ## Limits
 

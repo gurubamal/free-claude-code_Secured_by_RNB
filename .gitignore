@@ -20,6 +20,8 @@ auth.json
 token.json
 tokens.json
 secrets.json
+client_secret*.json
+gemini-oauth.json
 /private/
 /logs/
 server.log

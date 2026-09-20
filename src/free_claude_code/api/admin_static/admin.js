@@ -381,6 +381,14 @@ function updateProviderCard(provider) {
     actions.appendChild(settings);
   }
   card.replaceChildren(title, meta, result, actions);
+  if (provider.provider_id === "gemini_oauth") {
+    const guide = document.createElement("a");
+    guide.href = "https://github.com/gurubamal/free-claude-code_Secured_by_RNB/blob/main/docs/GOOGLE_ACCOUNT.md";
+    guide.target = "_blank";
+    guide.rel = "noopener noreferrer";
+    guide.textContent = "Google account setup guide";
+    actions.appendChild(guide);
+  }
   if (state.config.automatic_free_models && provider.automatic_free_policy_supported === false) {
     const policyNote = document.createElement("span");
     policyNote.className = "provider-meta";
@@ -520,7 +528,7 @@ function populateConnectedAccountActions(provider, status, actions) {
   }
   actions.appendChild(
     authButton(
-      "Connect",
+      providerId === "gemini_oauth" ? "Sign in with Google" : "Connect",
       (button) => startConnectedAccountLogin(providerId, defaultMode, button),
     ),
   );
@@ -908,6 +916,7 @@ function inputForField(field) {
   const input = document.createElement("input");
   input.type = field.type === "number" ? "number" : "text";
   if (field.type === "secret") {
+    input.type = "password";
     input.setAttribute("autocapitalize", "none");
     input.spellcheck = false;
     input.setAttribute("autocorrect", "off");

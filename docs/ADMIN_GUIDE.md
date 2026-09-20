@@ -16,6 +16,8 @@ The screenshot's **378 models available** is the OpenRouter provider catalog cou
 
 ## 2. More cloud-provider settings
 
+**Gemini / Google account** now appears under **OAuth providers**. Choose **Edit** to save your own Google Desktop OAuth client ID, secret and Cloud project ID; then choose **Sign in with Google**. Enable **Allow paid API routes** to include it in automatic routing. Google API quotas/billing apply, and the 512k floor remains. See the [Google account setup guide](GOOGLE_ACCOUNT.md) for the required one-time Google configuration. The historical screenshots below predate this addition.
+
 ![Cloud-provider cards including Gemini, Groq, Kilo, Mistral and NVIDIA NIM, each with a Configure button](images/admin-cloud-providers.png)
 
 Scroll through the cloud providers to find the service whose credentials you want to configure. A visible card means a configuration interface exists; it does not mean that provider is configured, included in the automatic free pool, or currently offers a qualifying model.

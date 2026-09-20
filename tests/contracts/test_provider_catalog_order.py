@@ -6,11 +6,14 @@ from free_claude_code.config.provider_catalog import (
 )
 
 _EXPECTED_PROVIDER_ORDER: tuple[str, ...] = (
+    "commandcode",
+    "kimchi",
     "nvidia_nim",
     "open_router",
     "groq",
     "cline_pass",
     "openai",
+    "gemini_oauth",
     "github_copilot",
     "xai",
     "qwencloud",

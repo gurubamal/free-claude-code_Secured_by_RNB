@@ -9,6 +9,7 @@ This repository builds on an existing MIT-licensed project; the upstream source 
 - [README](https://github.com/gurubamal/free-claude-code_Secured_by_RNB/blob/main/README.md): features, setup, paid switches and actual provider/model display.
 - [Routing guide](https://github.com/gurubamal/free-claude-code_Secured_by_RNB/blob/main/FREE_ROUTING.md): provider support, priorities, automatic fallback, cooldowns and the 512k minimum.
 - [Illustrated Admin guide](https://github.com/gurubamal/free-claude-code_Secured_by_RNB/blob/main/docs/ADMIN_GUIDE.md): the three supplied screenshots and control instructions.
+- [Google account setup](docs/GOOGLE_ACCOUNT.md): sign in to the Gemini API with your own Google Desktop OAuth client, without a Gemini API key.
 
 ## RNB changes
 
@@ -20,6 +21,7 @@ This repository builds on an existing MIT-licensed project; the upstream source 
 | Password reset | Invalidates browser sessions while preserving provider configuration |
 | Automatic routing | Free by default; opt-in subscriptions and paid APIs, configurable category/provider order, persistent cooldowns and a strict 512k+ floor |
 | Route visibility | Actual provider/model, billing category, latest attempt and last completed success in the web controls |
+| Google account login | Gemini API browser OAuth with PKCE, private token storage, automatic refresh and disconnect; requires your own Google Cloud project and Desktop OAuth client |
 | Claude launcher | Automatic proxy startup, inherited credential-environment filtering, normal permission prompts, and inherited hooks/MCP disabled |
 | Remote messaging | Disabled by default; explicit sender/channel checks and restricted managed Claude tools |
 | Dependencies | Locked installation, pinned build tools and security minimums for packages flagged by the dated audit |

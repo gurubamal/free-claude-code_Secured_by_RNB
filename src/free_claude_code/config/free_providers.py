@@ -78,6 +78,12 @@ FREE_PROVIDERS = (
 )
 PAID_PROVIDERS = (
     FreeProviderPolicy(
+        "gemini_oauth",
+        "paid_api",
+        "google",
+        "https://ai.google.dev/gemini-api/docs/oauth",
+    ),
+    FreeProviderPolicy(
         "deepseek", "paid_api", "deepseek", "https://api-docs.deepseek.com/"
     ),
     FreeProviderPolicy(
@@ -108,6 +114,11 @@ SUBSCRIPTION_PROVIDERS = (
     ),
 )
 ROUTING_PROVIDERS = (*FREE_PROVIDERS, *PAID_PROVIDERS, *SUBSCRIPTION_PROVIDERS)
+CONNECTED_ROUTING_PROVIDERS = tuple(
+    p
+    for p in ROUTING_PROVIDERS
+    if PROVIDER_CATALOG[p.provider_id].auth_kind == "connected_account"
+)
 POLICY_BY_ID = {p.provider_id: p for p in ROUTING_PROVIDERS}
 
 

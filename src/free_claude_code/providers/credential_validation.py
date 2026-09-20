@@ -293,7 +293,10 @@ async def check_credentials(
             key,
             "The key check timed out."
             if key in _PROBE_BY_KEY
-            else "Automatic key verification is unavailable for this provider.",
+            else (
+                "This key can be saved, but there is no supported read-only key check. "
+                "A model list does not verify access; an inference request is needed to confirm it."
+            ),
         )
         for key in keys
     }

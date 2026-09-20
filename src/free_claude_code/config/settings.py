@@ -235,6 +235,15 @@ class Settings(BaseModel):
     gemini_api_key: OptionalNonEmptyString = Field(
         default=None, validation_alias="GEMINI_API_KEY"
     )
+    gemini_oauth_client_id: OptionalNonEmptyString = Field(
+        default=None, validation_alias="GEMINI_OAUTH_CLIENT_ID"
+    )
+    gemini_oauth_client_secret: OptionalNonEmptyString = Field(
+        default=None, validation_alias="GEMINI_OAUTH_CLIENT_SECRET", repr=False
+    )
+    gemini_oauth_project_id: OptionalNonEmptyString = Field(
+        default=None, validation_alias="GEMINI_OAUTH_PROJECT_ID"
+    )
 
     # ==================== Google Vertex AI ====================
     vertex_project_id: OptionalNonEmptyString = Field(

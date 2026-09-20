@@ -2,6 +2,26 @@
 
 Release: `6.2.46+rnb.1`, Windows, Python 3.14.0.
 
+## Google account OAuth update — 2026-09-20
+
+Added browser authorization for the public Gemini Developer API using the operator's own Google Desktop OAuth client and project. No Gemini CLI credentials or shared Google client secrets are imported. The existing paid-API switch gates automatic use; reported input context must still meet 512,000 tokens and tool metadata must be available. See [setup and scope](docs/GOOGLE_ACCOUNT.md).
+
+**239 scoped tests passed in 19.95 seconds**:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest security_tests tests/providers/test_gemini.py tests/providers/test_credential_validation.py tests/application/test_connected_accounts.py tests/contracts/test_admin_provider_manifest.py tests/contracts/test_provider_catalog_order.py tests/config/test_admin_status.py tests/config/test_admin_credential_changes.py tests/config/test_provider_catalog.py -n 0 -q --tb=short --show-capture=no
+```
+
+The Google tests exercise a real loopback callback with synthetic grants: state/host/duplicate-parameter rejection, PKCE, replay rejection, immediate cancellation and listener cleanup, private persistence, concurrent refresh, revoked-versus-transient refresh failures, disconnect/revocation failure, and project changes. Mock HTTP through the real OpenAI SDK verifies renewable bearer and quota-project headers. Chat ingress tests verify OAuth headers and fallback without forwarding them to another provider. Routing tests keep missing/small context excluded and distinguish paid API from subscription permission.
+
+Installed-Chrome testing passed **nine checks**, including Google setup fields, masked secret entry, the Google authorization URL, cancellation and masked re-editing. No real Google account or live provider was used. The [browser report](security-validation/browser-smoke.json) records this scope. A cancellation-before-task-start race and visible secret-input text were caught and corrected during these checks.
+
+A broader run produced 340 passes, 32 failures and one skip. All 32 failures were reproduced in an isolated checkout of the unchanged `81e1019` commit, in legacy configuration/migration tests that expect upstream defaults or plaintext storage. Those failures remain; this is not a claim that the entire upstream suite passes. Existing Cline wording/catalog-order and unsupported-probe-count expectations were updated to match the fork's already-added providers and this OAuth provider. Ruff checks passed. Dependencies were unchanged.
+
+After restarting the actual local server, at **10:15:24 UTC (15:45:24 IST)** health returned HTTP 200, the routing floor remained 512,000 and `gemini_oauth` reported `CONNECT_ACCOUNT` under `paid_api`. No Google client ID, client secret or project was saved in that installation. Completing real Google consent, account catalog discovery and live Gemini inference therefore remain unvalidated until the operator configures and signs in.
+
+## Earlier release checks
+
 | Check | Observed result |
 | --- | --- |
 | `pytest security_tests tests/core -n 0 -q` | **844 passed**: 48 targeted security/routing cases and 796 upstream core cases, after dependency upgrades |

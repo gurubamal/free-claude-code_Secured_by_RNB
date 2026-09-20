@@ -251,6 +251,52 @@ def main():
                 checks.append(
                     "Chrome first login, mandatory change and full Admin render"
                 )
+                google_card = page.locator('[data-provider="gemini_oauth"]')
+                google_card.get_by_role("button", name="Sign in with Google").wait_for()
+                assert google_card.get_by_role(
+                    "link", name="Google account setup guide"
+                ).is_visible()
+                google_card.get_by_role("button", name="Edit", exact=True).click()
+                page.locator("#field-GEMINI_OAUTH_CLIENT_ID").fill(
+                    "synthetic-client.apps.googleusercontent.com"
+                )
+                page.locator("#field-GEMINI_OAUTH_CLIENT_SECRET").fill(
+                    "synthetic-browser-secret"
+                )
+                assert (
+                    page.locator("#field-GEMINI_OAUTH_CLIENT_SECRET").get_attribute(
+                        "type"
+                    )
+                    == "password"
+                )
+                page.locator("#field-GEMINI_OAUTH_PROJECT_ID").fill("synthetic-project")
+                page.locator("#saveProvider").click()
+                page.locator("#providerDialog").wait_for(state="hidden")
+                google_card.get_by_role("button", name="Sign in with Google").wait_for()
+                with page.expect_popup() as google_popup:
+                    google_card.get_by_role(
+                        "button", name="Sign in with Google"
+                    ).click()
+                popup = google_popup.value
+                google_card.get_by_role("button", name="Cancel sign-in").wait_for()
+                google_status = page.evaluate("state.authStatuses.get('gemini_oauth')")
+                assert google_status["authorization_url"].startswith(
+                    "https://accounts.google.com/o/oauth2/v2/auth?"
+                )
+                assert "synthetic-browser-secret" not in json.dumps(google_status)
+                assert google_status["connected"] is False
+                google_card.get_by_role("button", name="Cancel sign-in").click()
+                google_card.get_by_role("button", name="Sign in with Google").wait_for()
+                popup.close()
+                google_card.get_by_role("button", name="Edit", exact=True).click()
+                assert (
+                    page.locator("#field-GEMINI_OAUTH_CLIENT_SECRET").input_value()
+                    != "synthetic-browser-secret"
+                )
+                page.locator("#cancelProviderDialog").click()
+                checks.append(
+                    "Chrome Google OAuth setup, protected secret, Google sign-in URL and cancellation (no Google account used)"
+                )
                 page.evaluate("""() => {
                     state.config.automatic_free_models = true;
                     state.authStatuses.set('openai', {state: 'connected', connected: true});

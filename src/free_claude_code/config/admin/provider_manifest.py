@@ -327,6 +327,7 @@ def provider_field_specs() -> tuple[ConfigFieldSpec, ...]:
         *_credential_field_specs(),
         *_cloudflare_account_field_specs(),
         *_vertex_field_specs(),
+        *_gemini_oauth_field_specs(),
         *_base_url_field_specs(),
         *_proxy_field_specs(),
     )
@@ -420,6 +421,48 @@ def _vertex_field_specs() -> tuple[ConfigFieldSpec, ...]:
                 "us-central1."
             ),
         ),
+    )
+
+
+def _gemini_oauth_field_specs() -> tuple[ConfigFieldSpec, ...]:
+    return tuple(
+        ConfigFieldSpec(
+            key=key,
+            label=label,
+            section_id="providers",
+            field_type="secret" if secret else "text",
+            settings_attr=attr,
+            provider_ids=("gemini_oauth",),
+            secret=secret,
+            description=description,
+        )
+        for key, label, attr, secret, description in (
+            (
+                "GEMINI_OAUTH_CLIENT_ID",
+                "Google Desktop OAuth Client ID",
+                "gemini_oauth_client_id",
+                False,
+                "Create your own Desktop app client in Google Auth Platform. "
+                "See the Google account setup guide linked on this provider card.",
+            ),
+            (
+                "GEMINI_OAUTH_CLIENT_SECRET",
+                "Google OAuth Client Secret",
+                "gemini_oauth_client_secret",
+                True,
+                "The secret from your own Desktop OAuth client; stored privately. "
+                "Save these settings before signing in with Google.",
+            ),
+            (
+                "GEMINI_OAUTH_PROJECT_ID",
+                "Google Cloud Project ID",
+                "gemini_oauth_project_id",
+                False,
+                "Enable the Generative Language API in this project. Project API "
+                "quotas and billing apply; Gemini app/CLI allowances do not transfer. "
+                "Enable paid APIs in Routing controls to use this connection automatically.",
+            ),
+        )
     )
 
 

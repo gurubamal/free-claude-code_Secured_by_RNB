@@ -145,7 +145,7 @@ class AutomaticFreePool:
         policy = POLICY_BY_ID[provider_id]
         identity = (
             self._connected.get(provider_id, "disconnected")
-            if policy.mode == "subscription"
+            if PROVIDER_CATALOG[provider_id].auth_kind == "connected_account"
             else str(getattr(settings, PROVIDER_CATALOG[provider_id].base_url_attr, ""))
             if policy.mode == "local"
             else provider_key(settings, provider_id)
@@ -194,7 +194,7 @@ class AutomaticFreePool:
     async def refresh(self, settings, *, force=False):
         self._connected = (
             await self._subscriptions.identities()
-            if settings.allow_subscription_models and self._subscriptions is not None
+            if self._subscriptions is not None
             else {}
         )
         fingerprint = self._config_fingerprint(settings)
@@ -233,12 +233,20 @@ class AutomaticFreePool:
                         if policy.mode == "free_account"
                         else False,
                     }
-                    if policy.mode == "subscription":
-                        report["state"] = (
-                            "DISABLED"
-                            if not settings.allow_subscription_models
-                            else "CONNECT_ACCOUNT"
+                    if (
+                        PROVIDER_CATALOG[policy.provider_id].auth_kind
+                        == "connected_account"
+                    ):
+                        enabled = (
+                            settings.allow_subscription_models
+                            if policy.mode == "subscription"
+                            else settings.allow_paid_api_models
                         )
+                        report["state"] = (
+                            "DISABLED" if not enabled else "CONNECT_ACCOUNT"
+                        )
+                        if not enabled:
+                            return [], report
                         if (
                             policy.provider_id not in self._connected
                             or self._subscriptions is None
@@ -284,7 +292,7 @@ class AutomaticFreePool:
                                                 info.input_modalities
                                                 and "image" in info.input_modalities
                                             ),
-                                            "subscription",
+                                            policy.mode,
                                         )
                                     )
                             report.update(

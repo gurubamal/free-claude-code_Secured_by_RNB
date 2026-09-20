@@ -19,6 +19,7 @@ from free_claude_code.config.settings import Settings
 from free_claude_code.core.async_tasks import run_sync_owned
 from free_claude_code.messaging.voice import Transcriber
 from free_claude_code.providers.base import BaseProvider, ProviderConfig
+from free_claude_code.providers.gemini_oauth.auth import GeminiOAuthManager
 from free_claude_code.providers.github_copilot.auth import CopilotAuthManager
 from free_claude_code.providers.openai_codex.auth import OpenAIAuthManager
 from free_claude_code.providers.runtime.runtime import ProviderRuntime, create_provider
@@ -50,6 +51,10 @@ def build_asgi_app(
     )
     openai_auth = OpenAIAuthManager(proxy=settings.openai_proxy)
     copilot_auth = CopilotAuthManager()
+    provider_manager = None
+    google_auth = GeminiOAuthManager(
+        lambda: provider_manager.current_settings() if provider_manager else settings
+    )
     copilot_factory = partial(_load_copilot_provider, auth=copilot_auth)
     openai_factory = partial(_load_openai_provider, auth=openai_auth)
     provider_constructor = partial(
@@ -57,6 +62,7 @@ def build_asgi_app(
         provider_loaders={
             "openai": openai_factory,
             "github_copilot": copilot_factory,
+            "gemini_oauth": partial(_load_google_provider, auth=google_auth),
         },
     )
     runtime_factory = partial(
@@ -69,6 +75,7 @@ def build_asgi_app(
         connected_provider_ids=lambda: (
             *openai_auth.connected_provider_ids(),
             *copilot_auth.connected_provider_ids(),
+            *google_auth.connected_provider_ids(),
         ),
         model_catalog_publisher=CodexModelCatalogPublisher(),
     )
@@ -83,7 +90,11 @@ def build_asgi_app(
         transcriber=None,
         transcriber_factory=_create_transcriber,
         restart_callback=restart_callback,
-        connected_accounts={"openai": openai_auth, "github_copilot": copilot_auth},
+        connected_accounts={
+            "openai": openai_auth,
+            "github_copilot": copilot_auth,
+            "gemini_oauth": google_auth,
+        },
     )
     services = ApiServices(
         requests=provider_manager,
@@ -104,6 +115,20 @@ def _load_openai_provider(*, auth: OpenAIAuthManager) -> ProviderFactory:
         admission: ProviderAdmissionController,
     ) -> BaseProvider:
         return OpenAICodexProvider(config, auth=auth, admission=admission)
+
+    return construct
+
+
+def _load_google_provider(*, auth: GeminiOAuthManager) -> ProviderFactory:
+    from free_claude_code.providers.gemini_oauth.client import GeminiOAuthProvider
+
+    def construct(config, settings, admission):
+        return GeminiOAuthProvider(
+            config,
+            auth=auth,
+            project_id=settings.gemini_oauth_project_id,
+            admission=admission,
+        )
 
     return construct
 

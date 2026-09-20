@@ -8,6 +8,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from starlette.responses import JSONResponse, StreamingResponse
 
+from free_claude_code.application.errors import ApplicationError
 from free_claude_code.application.free_pool import local_base
 from free_claude_code.config.free_mode import free_request_body
 from free_claude_code.config.free_providers import POLICY_BY_ID, provider_key
@@ -52,7 +53,7 @@ def chat_target(settings, model, payload):
     )
     if model.provider_id == "open_router" and model.billing == "free":
         body = free_request_body(body, model=model.model_id)
-    if model.provider_id == "gemini":
+    if model.provider_id in {"gemini", "gemini_oauth"}:
         body["model"] = model.model_id.removeprefix("models/")
     policy = POLICY_BY_ID[model.provider_id]
     base = (
@@ -140,6 +141,14 @@ async def free_chat(
             quota = None
             try:
                 pool.record_attempt(model, request_id=request_id)
+                if model.provider_id == "gemini_oauth":
+                    # Reuse the credential owner; never expose OAuth tokens via Admin.
+                    lease = await request.app.state.services.requests.acquire()
+                    try:
+                        provider = await lease.resolve_provider(model.provider_id)
+                        headers = await provider.authorization_headers()
+                    finally:
+                        await lease.release()
                 response = await client.send(
                     client.build_request("POST", url, headers=headers, json=body),
                     stream=True,
@@ -292,6 +301,7 @@ async def free_chat(
                 ValueError,
                 TimeoutError,
                 ExecutionFailure,
+                ApplicationError,
             ) as error:
                 if response is not None:
                     await response.aclose()
