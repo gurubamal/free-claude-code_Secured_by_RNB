@@ -86,6 +86,30 @@ SECTIONS: tuple[ConfigSectionSpec, ...] = (
 
 _NON_PROVIDER_FIELDS: tuple[ConfigFieldSpec, ...] = (
     ConfigFieldSpec(
+        "ROUTING_SELECTED_PROVIDER",
+        "Selected routing provider",
+        "models",
+        settings_attr="routing_selected_provider",
+        advanced=True,
+        description="Use Routing controls to choose an eligible provider or return to automatic selection.",
+    ),
+    ConfigFieldSpec(
+        "ROUTING_SELECTED_MODEL",
+        "Selected routing model",
+        "models",
+        settings_attr="routing_selected_model",
+        advanced=True,
+        description="Exact catalog model ID within the selected provider. Empty selects its best eligible model.",
+    ),
+    ConfigFieldSpec(
+        "ROUTING_SELECTED_BILLING",
+        "Selected route billing",
+        "models",
+        settings_attr="routing_selected_billing",
+        advanced=True,
+        description="free, subscription, or paid_api. Selection cannot enable a disabled billing category.",
+    ),
+    ConfigFieldSpec(
         "ALLOW_SUBSCRIPTION_MODELS",
         "Allow connected subscriptions",
         "models",
@@ -135,7 +159,7 @@ _NON_PROVIDER_FIELDS: tuple[ConfigFieldSpec, ...] = (
         "models",
         "boolean",
         settings_attr="auto_free_models",
-        description="Automatically select eligible free models and independent provider fallbacks. Overrides manual model and fallback selections. See Automatic free routing for readiness.",
+        description="Use Routing controls to choose a first provider/model preference with automatic fallback. Legacy default/tier models and manual fallback lists are ignored while enabled.",
     ),
     ConfigFieldSpec(
         "MODEL",
@@ -143,7 +167,7 @@ _NON_PROVIDER_FIELDS: tuple[ConfigFieldSpec, ...] = (
         "models",
         "model",
         settings_attr="model",
-        description="Provider/model used when no tier-specific override applies.",
+        description="Used only when Automatic free routing is off and no tier override applies. For a manual first preference with automatic fallback, use Routing controls instead.",
     ),
     ConfigFieldSpec(
         "MODEL_FABLE",

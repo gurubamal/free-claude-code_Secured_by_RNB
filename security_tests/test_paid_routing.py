@@ -39,7 +39,10 @@ async def test_category_priority_precedes_siblings_and_reserves_later_categories
 
 
 @pytest.mark.parametrize("wire", ["messages", "responses"])
-def test_real_deepseek_adapter_sends_sibling_after_503(monkeypatch, wire):
+@pytest.mark.parametrize("manual_selection", [False, True])
+def test_real_deepseek_adapter_sends_sibling_after_503(
+    monkeypatch, wire, manual_selection
+):
     from free_helpers import freeze_pool
     from starlette.testclient import TestClient
 
@@ -47,7 +50,15 @@ def test_real_deepseek_adapter_sends_sibling_after_503(monkeypatch, wire):
     from free_claude_code.providers.runtime.factory import prepare_provider
     from tests.providers.support import SDKStreamDouble
 
-    settings = Settings(deepseek_api_key="synthetic", allow_paid_api_models=True)
+    first = "deepseek-z-selected" if manual_selection else "deepseek-first"
+    second = "deepseek-a-fallback" if manual_selection else "deepseek-second"
+    settings = Settings(
+        deepseek_api_key="synthetic",
+        allow_paid_api_models=True,
+        routing_selected_provider="deepseek" if manual_selection else None,
+        routing_selected_model=first if manual_selection else None,
+        routing_selected_billing="paid_api",
+    )
     provider = prepare_provider("deepseek", {})(settings)
     sent = []
 
@@ -67,7 +78,7 @@ def test_real_deepseek_adapter_sends_sibling_after_503(monkeypatch, wire):
 
     async def create(**body):
         sent.append(body["model"])
-        if body["model"] == "deepseek-first":
+        if body["model"] == first:
             raise openai.InternalServerError(
                 "Service too busy",
                 response=httpx2.Response(
@@ -105,7 +116,7 @@ def test_real_deepseek_adapter_sends_sibling_after_503(monkeypatch, wire):
     )
     freeze_pool(
         app.state.free_pool,
-        (model("deepseek", "deepseek-first"), model("deepseek", "deepseek-second")),
+        (model("deepseek", first), model("deepseek", second)),
     )
     payload = {"model": "automatic", "stream": True}
     if wire == "messages":
@@ -125,8 +136,8 @@ def test_real_deepseek_adapter_sends_sibling_after_503(monkeypatch, wire):
         client.portal.call(provider.cleanup)
     assert result.status_code == 200, result.text
     assert "SIBLING_OK" in result.text
-    assert sent == ["deepseek-first", "deepseek-second"]
-    assert app.state.free_pool._last_success == "deepseek/deepseek-second"
+    assert sent == [first, second]
+    assert app.state.free_pool._last_success == "deepseek/" + second
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position=0)]
-    [ValidateSet('serve', 'ensure-server', 'reset-password', 'show-initial-password', 'claude', 'codex')]
+    [ValidateSet('serve', 'ensure-server', 'reset-password', 'show-initial-password', 'claude', 'codex', 'route')]
     [string]$Command = 'serve',
     [Parameter(ValueFromRemainingArguments=$true)]
     [string[]]$ClientArguments

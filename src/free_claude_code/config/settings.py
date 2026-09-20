@@ -2,7 +2,7 @@
 
 import ipaddress
 import secrets
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import (
     BaseModel,
@@ -404,6 +404,30 @@ class Settings(BaseModel):
     routing_disabled_providers: OptionalNonEmptyString = Field(
         default=None, validation_alias="ROUTING_DISABLED_PROVIDERS"
     )
+    routing_selected_provider: OptionalNonEmptyString = Field(
+        default=None, validation_alias="ROUTING_SELECTED_PROVIDER"
+    )
+    routing_selected_model: OptionalNonEmptyString = Field(
+        default=None, validation_alias="ROUTING_SELECTED_MODEL"
+    )
+    routing_selected_billing: Literal["free", "subscription", "paid_api"] = Field(
+        default="free", validation_alias="ROUTING_SELECTED_BILLING"
+    )
+
+    @field_validator("routing_selected_provider")
+    @classmethod
+    def validate_selected_provider(cls, value):
+        if value is not None and value not in SUPPORTED_PROVIDER_IDS:
+            raise ValueError("Unknown selected provider")
+        return value
+
+    @field_validator("routing_selected_model")
+    @classmethod
+    def validate_selected_model(cls, value):
+        if value is not None and (len(value) > 256 or not value.isprintable()):
+            raise ValueError("Use a printable model ID of at most 256 characters")
+        return value
+
     free_model_priority: OptionalNonEmptyString = Field(
         default=DEFAULT_FREE_MODEL_PRIORITY,
         validation_alias="FREE_MODEL_PRIORITY",

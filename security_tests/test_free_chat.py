@@ -11,7 +11,10 @@ from free_claude_code.config.settings import Settings
 
 
 @pytest.mark.parametrize("statuses", [[200], [429, 503, 200], [429, 429, 429]])
-def test_chat_enforces_zero_cost_and_bounded_retries(monkeypatch, statuses):
+@pytest.mark.parametrize("manual_selection", [False, True])
+def test_chat_enforces_zero_cost_and_bounded_retries(
+    monkeypatch, statuses, manual_selection
+):
     from free_claude_code.api import free_chat_routes
 
     requests = []
@@ -46,6 +49,8 @@ def test_chat_enforces_zero_cost_and_bounded_retries(monkeypatch, statuses):
         open_router_api_key="synthetic-key",
         groq_api_key="synthetic-groq",
         gemini_api_key="synthetic-gemini",
+        routing_selected_provider="groq" if manual_selection else None,
+        routing_selected_model="synthetic-free" if manual_selection else None,
     )
     services = SimpleNamespace(
         requests=SimpleNamespace(current_settings=lambda: settings),
@@ -76,6 +81,8 @@ def test_chat_enforces_zero_cost_and_bounded_retries(monkeypatch, statuses):
     assert response.status_code == statuses[-1]
     assert len(requests) == len(statuses) <= 3
     assert closed
+    if manual_selection:
+        assert requests[0].url.host == "api.groq.com"
     for request in requests:
         body = json.loads(request.content)
         assert body["model"] in {"openrouter/free", "synthetic-free"}

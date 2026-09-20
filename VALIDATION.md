@@ -2,6 +2,22 @@
 
 Release: `6.2.46+rnb.1`, Windows, Python 3.14.0.
 
+## CLI and web route selection — 2026-09-20
+
+Added `Run-Hardened.ps1 route list/status/use/auto` and web provider/model selectors. A manual choice is a first preference; automatic fallback always stays enabled. Selection cannot enable billing, override exclusions, waive 512k/tool/request-fit checks or manufacture a catalog entry. It persists for new requests across gateway clients. Returning to automatic selection removes the preference.
+
+**206 security and targeted configuration tests passed in 16.07 seconds**:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q -n 4 security_tests tests/contracts/test_admin_provider_manifest.py tests/config/test_admin_status.py
+```
+
+Coverage includes selected-route 429/503 fallback and cooldown behavior, synthetic Messages/Responses/Chat adapter fallback, private config persistence and credential preservation, rejecting unknown/small models and disabled paid categories, CLI token handling, loopback-only mutations, browser-origin rejection, and Admin session/CSRF enforcement. This remains a scoped test result; the earlier upstream-suite limitations below still apply.
+
+The installed-Chrome smoke test passed all nine checks, including manual provider/model selection, unavailable-selection fallback status and return to automatic selection. The test now waits for DOM readiness and the final URL during logout/reset redirects; earlier runs hit navigation timing failures before that correction. Browser provider/inference data are synthetic.
+
+At **12:14:02 UTC (17:44:02 IST)**, the live local CLI selected an actual catalog free model that was already in daily-quota cooldown, reported automatic fallback enabled, and restored automatic selection. A fresh private-store read confirmed credential values unchanged. This check sent **zero inference requests**; it validates control/persistence, not successful live fallback inference. Existing gateway activity is separate from this test.
+
 ## Preferred free models update — 2026-09-20
 
 Default free preference: DeepSeek V4.1 Flash, Kimi K3, Qwen 3.8 Max, then GLM 5.3 Flash. Preferences operate across eligible free providers before provider order or last success, and return to the preferred model after cooldown. Version matching excludes older DeepSeek, FlashX, preview/batch and unverified latest aliases. Billing permission, tool support, the 512k minimum and reserved paid/subscription fallback slots remain intact.

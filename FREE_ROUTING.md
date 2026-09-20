@@ -15,6 +15,16 @@ For a visual walkthrough of provider configuration, see the [Admin screenshot gu
 
 Acknowledgments bind to the key fingerprint; changing the key requires a new acknowledgment. Revoke it before enabling paid billing. An unconfirmed account-dependent key is considered only as paid access when that category is enabled. The app cannot independently prove these billing settings. Saving a key does not purchase credits, upgrade a plan or create an account. **There is no monetary budget cap in this gateway**; use each provider's spending controls. Subscription access can consume account allowance or purchased credits.
 
+## Manual first preference with automatic fallback
+
+Use **Choose provider and model** on `/admin/free`, or `Run-Hardened.ps1 route use PROVIDER [MODEL]`. Choose exact IDs from `route list` (free by default). Omitting MODEL chooses the best eligible model in that provider. `route status` shows the preference and last successful route; `route auto` restores the saved automatic order. The web console offers the same automatic-return button.
+
+A selected route is tried before the normal category/model/provider priorities, but **automatic fallback always remains on**. It cannot enable paid access, undo provider exclusions, waive context/capability checks, reset cooldowns or force an unknown catalog ID. If unavailable or unsuitable, automatic candidates take over; after cooldown, the saved preference can be first again. Selecting a model currently cooling down is allowed, with its unavailability displayed. No route can guarantee capacity when every candidate is exhausted.
+
+The preference is stored outside the repository and applies to new requests from all clients. Existing streams are not replayed. Choose `--billing paid_api` or `--billing subscription` only for categories already enabled in Admin. Free selection does not disable previously authorized paid fallback: fallback follows the saved billing switches/order.
+
+The local CLI calls a restricted selection endpoint using the proxy token loaded from protected storage. It requires a loopback client/Host, a control header and no browser Origin/Fetch-Metadata. It cannot edit keys or billing switches. Web changes retain the Admin session and CSRF checks. Anyone with local proxy-token access can change this shared route preference; use a separate gateway when clients need independent policy.
+
 ## Provider policies
 
 These are discovery integrations, not a claim that all providers are configured, quota-available or have a qualifying model today.

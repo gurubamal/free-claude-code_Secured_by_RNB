@@ -13,6 +13,17 @@
 <p id="activityUpdated" role="status"></p>
 <small>Updates every 10 seconds while this page is visible. This shows gateway records across connected clients. The CLI model label can be a fixed alias. An attempt is not proof of completed output; an interrupted connection may remain the latest attempt.</small>
 </section>
+<section class="card" style="margin:20px 0" aria-labelledby="selectionTitle">
+<h2 id="selectionTitle">Choose provider and model</h2>
+<p id="selectedRoute" role="status">Loading selection…</p>
+<p>A manual choice is your first preference. Automatic routing stays on: exhausted, unavailable or incompatible routes fall back before output starts. Billing switches and the 512k minimum still apply. Changes affect new requests from every client using this gateway.</p>
+<label>Model billing <select id="selectionBilling"><option value="free">Free models</option><option value="subscription">Connected subscriptions</option><option value="paid_api">Paid API models</option></select></label>
+<label style="max-width:none;margin:12px 0">Provider <select id="selectionProvider" style="max-width:100%"></select></label>
+<label style="max-width:none;margin:12px 0">Model <select id="selectionModel" style="max-width:100%"></select></label>
+<button id="useSelection" type="button">Use as first preference</button>
+<button id="automaticSelection" type="button">Return to automatic selection</button>
+<p id="selectionNotice" role="status"></p>
+</section>
 <section class="card" id="routingPolicy" aria-labelledby="policyTitle">
 <h2 id="policyTitle">Paid access and priority</h2>
 <label style="max-width:none"><input type="checkbox" id="allowSubscriptions">Allow connected subscriptions (ChatGPT / GitHub Copilot)</label>
@@ -47,6 +58,8 @@ function renderActivity(data){
  el('lastRoute').textContent=data.last_success_details?describeRoute(data.last_success_details):data.last_success||'No successful request recorded since server restart.';
  el('latestAttempt').textContent=data.latest_attempt?describeRoute(data.latest_attempt):'No attempt recorded since server restart.';
  el('activityUpdated').textContent='Route status checked '+new Date().toLocaleTimeString();
+ const s=data.selection||{mode:'automatic'};
+ el('selectedRoute').textContent=s.mode==='selected'?'First preference: '+s.provider+' / '+(s.model||'best eligible model')+' · '+s.billing.replaceAll('_',' ')+(s.available_models?' · automatic fallback enabled':' · no selected route available; using automatic fallback'):'Automatic selection · saved model and provider priorities apply';
  el('freePreferenceStatus').replaceChildren();
  for(const [index,p] of (data.free_model_preferences||[]).entries()){
   const ready=p.available_free_routes||[],eligible=p.eligible_free_routes||[];
@@ -56,6 +69,7 @@ function renderActivity(data){
 async function api(path,body){const r=await fetch(path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-FCC-Admin':'1'},body:body===undefined?undefined:JSON.stringify(body)});if(r.status===401){location.href='/admin/login';throw Error('Sign in required')}const data=await r.json();if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:'Request failed');return data}
 function render(data){
  renderActivity(data);
+ renderSelection(data);
  el('eligible').textContent=data.eligible_models;el('available').textContent=data.available_models;
  el('providers').textContent=data.providers.filter(x=>x.models>0).length;el('note').textContent=data.note;
  el('notice').textContent=(data.automatic?'Automatic routing enabled. ':'Automatic routing disabled in settings. ')+'Catalog checked '+new Date(data.refreshed_at).toLocaleString();
@@ -81,6 +95,48 @@ function render(data){
  }
 }
 el('refresh').onclick=async()=>{el('refresh').disabled=true;el('notice').textContent='Checking current catalogs…';try{render(await api('/admin/api/free/refresh',{}))}catch(e){el('notice').textContent=e.message}finally{el('refresh').disabled=false}};
+let selectionData=null,selectionDirty=false,selectionSaving=false;
+function renderSelection(data){
+ selectionData=data;
+ el('selectionBilling').querySelector('[value="subscription"]').disabled=!data.allow_subscriptions;
+ el('selectionBilling').querySelector('[value="paid_api"]').disabled=!data.allow_paid_api;
+ if(selectionDirty||selectionSaving)return;
+ const s=data.selection||{};
+ el('selectionBilling').value=s.billing||'free';
+ drawSelectionProviders(s.provider||'',s.model||'');
+}
+function selectionModels(p){return (p?.model_details||[]).filter(m=>m.billing===el('selectionBilling').value)}
+function drawSelectionProviders(provider='',model=''){
+ el('selectionProvider').replaceChildren(new Option('Choose a provider',''));
+ for(const p of selectionData?.providers||[]){
+  const count=selectionModels(p).length,option=new Option(p.name+' ('+count+' eligible)',p.provider);
+  option.disabled=!count||p.state==='EXCLUDED';el('selectionProvider').append(option);
+ }
+ el('selectionProvider').value=provider;drawSelectionModels(model);
+}
+function drawSelectionModels(model=''){
+ const p=selectionData?.providers.find(p=>p.provider===el('selectionProvider').value);
+ const models=selectionModels(p);
+ el('selectionModel').replaceChildren(new Option('Best eligible model in this provider',''));
+ for(const m of models)el('selectionModel').append(new Option(m.id+' · '+m.context_tokens.toLocaleString()+' context · '+(m.available?'available':'unavailable; automatic fallback'),m.id));
+ el('selectionModel').value=model;
+ el('useSelection').disabled=!models.length||p?.state==='EXCLUDED';
+}
+el('selectionBilling').onchange=()=>{selectionDirty=true;drawSelectionProviders()};
+el('selectionProvider').onchange=()=>{selectionDirty=true;drawSelectionModels()};
+el('selectionModel').onchange=()=>{selectionDirty=true};
+async function saveSelection(automatic){
+ if(selectionSaving)return;selectionSaving=true;
+ el('useSelection').disabled=true;el('automaticSelection').disabled=true;el('selectionNotice').textContent='Checking and saving selection…';
+ try{
+  const body=automatic?{mode:'automatic'}:{mode:'selected',provider:el('selectionProvider').value,model:el('selectionModel').value||null,billing:el('selectionBilling').value};
+  const data=await api('/admin/api/free/selection',body);selectionSaving=false;selectionDirty=false;render(data);
+  el('selectionNotice').textContent='Saved for new requests. Automatic fallback remains enabled.';
+ }catch(e){selectionSaving=false;el('selectionNotice').textContent=e.message;drawSelectionModels(el('selectionModel').value)}
+ finally{selectionSaving=false;el('automaticSelection').disabled=false}
+}
+el('useSelection').onclick=()=>saveSelection(false);
+el('automaticSelection').onclick=()=>saveSelection(true);
 let policyProviders=[];
 function renderPolicy(data){
  el('allowSubscriptions').checked=data.allow_subscriptions===true;
@@ -117,5 +173,5 @@ el('savePolicy').onclick=async()=>{el('savePolicy').disabled=true;el('policyNoti
 };
 api('/admin/api/free/status').then(data=>{render(data);renderPolicy(data)}).catch(e=>el('notice').textContent=e.message);
 let activityLoading=false;
-setInterval(async()=>{if(document.hidden||activityLoading)return;activityLoading=true;try{renderActivity(await api('/admin/api/free/status'))}catch(e){el('activityUpdated').textContent='Route status unavailable: '+e.message}finally{activityLoading=false}},10000);
+setInterval(async()=>{if(document.hidden||activityLoading)return;activityLoading=true;try{const data=await api('/admin/api/free/status');renderActivity(data);renderSelection(data)}catch(e){el('activityUpdated').textContent='Route status unavailable: '+e.message}finally{activityLoading=false}},10000);
 </script></body></html>

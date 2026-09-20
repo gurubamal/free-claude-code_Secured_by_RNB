@@ -5,7 +5,7 @@
     "Chrome first login, mandatory change and full Admin render",
     "Chrome Google OAuth setup, protected secret, Google sign-in URL and cancellation (no Google account used)",
     "Chrome connected OpenAI catalog count and paid-access control link (synthetic state)",
-    "Chrome route identity and timed refresh, 512k+ display, acknowledgments, paid switches, free-model preference availability and editing, provider reordering, exclusions and saving (synthetic API fixtures)",
+    "Chrome manual provider/model selection, automatic fallback status and automatic restore, route identity and timed refresh, 512k+ display, acknowledgments, paid switches, free-model preference availability and editing, provider reordering, exclusions and saving (synthetic API fixtures)",
     "Chrome existing password change and sign-out",
     "local reset revokes browser session and preserves provider config",
     "configuration restart on a new port preserves credentials and permits sign-in"

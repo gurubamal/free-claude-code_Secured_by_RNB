@@ -115,6 +115,24 @@ def unused_port():
         return listener.getsockname()[1]
 
 
+def wait_for_url(page, pattern):
+    # Poll the final URL instead of binding to a navigation event that an
+    # authentication redirect may legitimately replace with another navigation.
+    import re
+
+    from playwright.sync_api import expect
+
+    expect(page).to_have_url(
+        re.compile(
+            "^"
+            + re.escape(pattern).replace(r"\*\*", ".*").replace(r"\*", "[^/]*")
+            + "$"
+        ),
+        timeout=20000,
+    )
+    page.wait_for_load_state("domcontentloaded")
+
+
 def main():
     from free_claude_code.harnesses.environment import client_environment
 
@@ -124,6 +142,7 @@ def main():
     os.environ["PYTHONIOENCODING"] = "utf-8"
     browser_env = dict(os.environ)
     import httpx
+    from playwright.sync_api import Error as PlaywrightError
     from playwright.sync_api import sync_playwright
 
     checks = []
@@ -230,7 +249,7 @@ def main():
                 failures = []
                 page.on("pageerror", lambda error: failures.append(str(error)))
                 page.goto(url + "/admin")
-                page.wait_for_url("**/admin/login")
+                wait_for_url(page, "**/admin/login")
                 output = ROOT / "security-validation"
                 output.mkdir(exist_ok=True)
                 page.screenshot(path=str(output / "login.png"), full_page=True)
@@ -244,7 +263,7 @@ def main():
                 page.locator("#login").wait_for(state="visible")
                 page.locator("#password").fill(password)
                 page.locator("#login button").click()
-                page.wait_for_url(url + "/admin")
+                wait_for_url(page, url + "/admin")
                 page.locator("#providerGroups .provider-strip").first.wait_for(
                     timeout=20000
                 )
@@ -324,6 +343,11 @@ def main():
                 )
                 free_status = {
                     "automatic": True,
+                    "selection": {
+                        "mode": "automatic",
+                        "billing": "free",
+                        "fallback": True,
+                    },
                     "free_model_priority": [
                         "deepseek-v4.1-flash",
                         "kimi-k3",
@@ -369,7 +393,12 @@ def main():
                             "available_models": 0,
                             "model_ids": ["synthetic-1m"],
                             "model_details": [
-                                {"id": "synthetic-1m", "context_tokens": 1048576}
+                                {
+                                    "id": "synthetic-1m",
+                                    "context_tokens": 1048576,
+                                    "billing": "free",
+                                    "available": False,
+                                }
                             ],
                             "retry_at": "2026-09-21T00:00:00+00:00",
                             "source": "https://openrouter.ai/docs/api/reference/limits",
@@ -383,7 +412,12 @@ def main():
                             "available_models": 1,
                             "model_ids": ["synthetic-512k"],
                             "model_details": [
-                                {"id": "synthetic-512k", "context_tokens": 512000}
+                                {
+                                    "id": "synthetic-512k",
+                                    "context_tokens": 512000,
+                                    "billing": "free",
+                                    "available": True,
+                                }
                             ],
                             "account_confirmed": False,
                             "source": "https://ai.google.dev/gemini-api/docs/billing",
@@ -392,8 +426,30 @@ def main():
                 }
                 confirmation_requests = []
                 policy_requests = []
+                selection_requests = []
 
                 def free_fixture(route):
+                    if route.request.url.endswith("/selection"):
+                        body = route.request.post_data_json
+                        selection_requests.append(body)
+                        if body["mode"] == "selected":
+                            assert body == {
+                                "mode": "selected",
+                                "provider": "open_router",
+                                "model": "synthetic-1m",
+                                "billing": "free",
+                            }
+                            free_status["selection"] = {
+                                **body,
+                                "fallback": True,
+                                "available_models": 0,
+                            }
+                        else:
+                            free_status["selection"] = {
+                                "mode": "automatic",
+                                "fallback": True,
+                                "billing": "free",
+                            }
                     if route.request.url.endswith("/policy"):
                         body = route.request.post_data_json
                         assert body["allow_subscriptions"] is True
@@ -429,6 +485,24 @@ def main():
                 ).wait_for()
                 page.locator("td").filter(has_text="Cooling down").wait_for()
                 assert page.locator("#eligible").inner_text() == "2"
+                page.locator("#selectionProvider").select_option("open_router")
+                page.locator("#selectionModel").select_option("synthetic-1m")
+                page.get_by_role(
+                    "button", name="Use as first preference", exact=True
+                ).click()
+                page.locator("#selectedRoute").filter(
+                    has_text="using automatic fallback"
+                ).wait_for()
+                page.get_by_role(
+                    "button", name="Return to automatic selection", exact=True
+                ).click()
+                page.locator("#selectedRoute").filter(
+                    has_text="Automatic selection"
+                ).wait_for()
+                assert [b["mode"] for b in selection_requests] == [
+                    "selected",
+                    "automatic",
+                ]
                 assert (
                     page.locator("#freeModelOrder")
                     .input_value()
@@ -485,7 +559,7 @@ def main():
                 page.screenshot(path=str(output / "free-routing.png"), full_page=True)
                 assert not failures, failures
                 checks.append(
-                    "Chrome route identity and timed refresh, 512k+ display, acknowledgments, paid switches, free-model preference availability and editing, provider reordering, exclusions and saving (synthetic API fixtures)"
+                    "Chrome manual provider/model selection, automatic fallback status and automatic restore, route identity and timed refresh, 512k+ display, acknowledgments, paid switches, free-model preference availability and editing, provider reordering, exclusions and saving (synthetic API fixtures)"
                 )
                 page.goto(url + "/admin")
                 page.locator("#providerGroups .provider-strip").first.wait_for(
@@ -502,22 +576,28 @@ def main():
                 page.locator("#login").wait_for(state="visible")
                 page.locator("#password").fill(changed)
                 page.locator("#login button").click()
-                page.wait_for_url(url + "/admin")
+                wait_for_url(page, url + "/admin")
                 page.locator("#hardenedLogout").click()
-                page.wait_for_url("**/admin/login")
+                wait_for_url(page, "**/admin/login")
                 checks.append("Chrome existing password change and sign-out")
                 page.locator("#password").fill(changed)
                 page.locator("#login button").click()
-                page.wait_for_url(url + "/admin")
+                wait_for_url(page, url + "/admin")
                 before = store.path.read_bytes()
                 AdminAccounts().reset_password("Synthetic Local Reset 925!")
                 assert store.path.read_bytes() == before
                 assert page.request.get(url + "/admin/api/status").status == 401
-                page.reload()
-                page.wait_for_url("**/admin/login")
+                try:
+                    page.reload()
+                except PlaywrightError as error:
+                    # Admin may already redirect after an in-flight request sees
+                    # revocation. The required login destination is still asserted.
+                    if "net::ERR_ABORTED" not in str(error):
+                        raise
+                wait_for_url(page, "**/admin/login")
                 page.locator("#password").fill("Synthetic Local Reset 925!")
                 page.locator("#login button").click()
-                page.wait_for_url(url + "/admin")
+                wait_for_url(page, url + "/admin")
                 checks.append(
                     "local reset revokes browser session and preserves provider config"
                 )
@@ -556,10 +636,10 @@ def main():
                         time.sleep(0.2)
                 assert store.read(env={}).settings.proxy_auth_token == token
                 page.goto(new_url + "/admin")
-                page.wait_for_url(new_url + "/admin/login")
+                wait_for_url(page, new_url + "/admin/login")
                 page.locator("#password").fill("Synthetic Local Reset 925!")
                 page.locator("#login button").click()
-                page.wait_for_url(new_url + "/admin")
+                wait_for_url(page, new_url + "/admin")
                 checks.append(
                     "configuration restart on a new port preserves credentials and permits sign-in"
                 )

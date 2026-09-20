@@ -76,13 +76,20 @@ def main(argv=None):
             "show-initial-password",
             "credential-helper",
             "ensure-server",
+            "route",
             "claude",
             "codex",
         ),
         nargs="?",
         default="serve",
     )
-    args, rest = parser.parse_known_args(argv)
+    command_argv = list(sys.argv[1:] if argv is None else argv)
+    # Keep routing subcommand flags (including --help) with its own parser.
+    if command_argv[:1] == ["route"]:
+        args = parser.parse_args(command_argv[:1])
+        rest = command_argv[1:]
+    else:
+        args, rest = parser.parse_known_args(command_argv)
     from free_claude_code.harnesses.environment import client_environment
 
     clean = client_environment(dict(os.environ), proxy_root_url="http://127.0.0.1")
@@ -101,6 +108,12 @@ def main(argv=None):
         ensure_server()
         print("Local proxy is ready.")
         return 0
+    if args.command == "route":
+        from free_claude_code.cli.route_control import main as route_main
+
+        if rest and not any(arg in {"-h", "--help"} for arg in rest):
+            ensure_server()
+        return route_main(rest)
     if args.command == "show-initial-password":
         from free_claude_code.core.admin_accounts import AdminAccounts
 

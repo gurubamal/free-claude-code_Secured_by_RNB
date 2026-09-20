@@ -35,7 +35,10 @@ The lower part of the page includes more cloud providers and the **Local provide
 1. Save the settings for providers you intend to use.
 2. Open **Routing controls** and complete required free-account confirmations. Optional switches permit subscriptions and paid APIs. Choose billing priority and the preferred free-model order (DeepSeek V4.1 Flash, Kimi K3, Qwen 3.8 Max, GLM 5.3 Flash by default). Availability appears beside each preference. Move providers up/down within those tiers, and uncheck unwanted providers; save preferences. Paid APIs may charge money and subscriptions may consume credits. Set limits with the provider; this gateway has no monetary budget cap.
 3. Select **Refresh catalogs**. Review missing credentials, catalog failures, eligible models, context and cooldowns. Refreshing does not reset quota.
-4. Launch Claude Code using `Claude-Free.ps1` from the repository, or invoke that launcher by its full path from your coding project. Automatic mode selects an eligible model without a manual model choice.
+4. Optionally use **Choose provider and model**: choose Free models, a provider and a model, then **Use as first preference**. Automatic fallback stays enabled when that route is exhausted or unavailable. **Return to automatic selection** clears the preference. The selected preference and actual gateway route are shown separately.
+5. Launch Claude Code using `Claude-Free.ps1` from the repository, or invoke that launcher by its full path from your coding project. Automatic mode selects an eligible model without a manual model choice.
+
+The CLI equivalents are `Run-Hardened.ps1 route list`, `route use PROVIDER [MODEL]`, `route status` and `route auto`. Selection is shared by new requests from all gateway clients and persists after restart.
 
 The **Actual gateway route** panel displays the provider/model that completed the last successful request and the latest attempt, with billing category and timestamps. It updates every ten seconds while visible. Records reset on restart and cover all connected clients. A pending attempt is not a successful response; a CLI header may remain a fixed alias.
 

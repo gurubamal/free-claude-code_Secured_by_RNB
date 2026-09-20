@@ -1,16 +1,117 @@
 """Authenticated free-routing status and local account acknowledgments."""
 
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, ConfigDict, StrictBool
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 
 from free_claude_code.core.free_accounts import FreeAccountConfirmations
 
+from .admin_security import require_loopback_admin
 from .dependencies import get_settings, require_proxy_auth
 
 router = APIRouter()
+
+
+class RouteSelectionPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["automatic", "selected"]
+    provider: str | None = Field(default=None, max_length=64)
+    model: str | None = Field(default=None, max_length=256)
+    billing: Literal["free", "subscription", "paid_api"] = "free"
+
+    @model_validator(mode="after")
+    def validate_selection(self):
+        if self.mode == "automatic" and (
+            self.provider is not None or self.model is not None
+        ):
+            raise ValueError("Automatic mode does not take a provider or model")
+        if self.mode == "selected" and not self.provider:
+            raise ValueError("Choose a provider")
+        if self.model is not None and (
+            not self.model.strip() or not self.model.isprintable()
+        ):
+            raise ValueError("Choose an exact printable catalog model ID")
+        return self
+
+
+async def apply_route_selection(body: RouteSelectionPayload, request: Request):
+    services = request.app.state.services
+    settings = services.requests.current_settings()
+    pool = request.app.state.free_pool
+    if body.mode == "selected":
+        if body.provider in (settings.routing_disabled_providers or "").split(","):
+            raise HTTPException(
+                400, "Provider is excluded. Enable it in Routing controls first."
+            )
+        if (body.billing == "paid_api" and not settings.allow_paid_api_models) or (
+            body.billing == "subscription" and not settings.allow_subscription_models
+        ):
+            raise HTTPException(
+                400, "This billing category is disabled. Enable it in Admin first."
+            )
+        await pool.refresh(settings, force=True)
+        if not any(
+            m.provider_id == body.provider
+            and m.billing == body.billing
+            and (body.model is None or m.model_id == body.model)
+            and m.tools
+            and m.context is not None
+            and m.context >= 512000
+            for m in pool._catalog
+        ):
+            raise HTTPException(
+                400,
+                "No matching eligible model in the current catalog. Check provider setup, free eligibility and the 512k minimum. Nothing changed.",
+            )
+    result = await services.admin.apply_admin_config(
+        {
+            "AUTO_FREE_MODELS": True,
+            "ROUTING_SELECTED_PROVIDER": body.provider,
+            "ROUTING_SELECTED_MODEL": body.model,
+            "ROUTING_SELECTED_BILLING": body.billing,
+        }
+    )
+    if result.get("errors") or result.get("applied") is False:
+        raise HTTPException(
+            400, "Route selection could not be saved. Check Admin configuration."
+        )
+    active = services.requests.current_settings()
+    if (
+        not active.auto_free_models
+        or active.routing_selected_provider != body.provider
+        or active.routing_selected_model != body.model
+        or active.routing_selected_billing != body.billing
+    ):
+        raise HTTPException(
+            409,
+            "Route selection is overridden by process settings or pending a restart. Check Admin before retrying.",
+        )
+    # Never expose the configuration response: it includes fields unrelated to routing.
+    return await pool.status(active)
+
+
+@router.post("/admin/api/free/selection")
+async def admin_route_selection(body: RouteSelectionPayload, request: Request):
+    return await apply_route_selection(body, request)
+
+
+@router.post(
+    "/v1/routing/selection",
+    dependencies=[Depends(require_proxy_auth), Depends(require_loopback_admin)],
+)
+async def cli_route_selection(body: RouteSelectionPayload, request: Request):
+    if (
+        request.headers.get("origin") is not None
+        or request.headers.get("sec-fetch-site") is not None
+        or request.headers.get("x-fcc-route-control") != "1"
+    ):
+        raise HTTPException(
+            403, "Use the local routing CLI or authenticated Admin controls."
+        )
+    return await apply_route_selection(body, request)
 
 
 class FreeAccountPayload(BaseModel):

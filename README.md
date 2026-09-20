@@ -67,6 +67,25 @@ Every selected model and fallback must have **at least 512,000 context tokens**,
 
 The **Actual gateway route** panel shows the last successful provider/model and latest attempt, billing category, context and timestamps. It refreshes every ten seconds while visible; records reset on server restart. These are gateway records across clients. A CLI header or a model's self-description may repeat the fixed client alias and does not establish the actual route.
 
+## Switch provider or model
+
+In **[Routing controls](http://127.0.0.1:8082/admin/free) → Choose provider and model**, choose **Free models**, a provider and an exact model (or the provider's best eligible model), then **Use as first preference**. **Return to automatic selection** removes that preference. Enabled subscription/paid categories can also be selected explicitly.
+
+Manual choice always keeps automatic fallback enabled. If the choice is exhausted, unavailable, excluded or unsuitable for the request, other eligible routes are tried in your saved automatic order before output starts. The manual choice becomes first again when eligible and outside cooldown. All routes retain the 512k floor and existing billing permissions. Settings persist and affect new requests from every client connected to this gateway.
+
+From the repository in PowerShell:
+
+```powershell
+.\Run-Hardened.ps1 route list
+.\Run-Hardened.ps1 route list --provider open_router
+.\Run-Hardened.ps1 route use open_router "<MODEL_ID_FROM_LIST>"
+.\Run-Hardened.ps1 route use open_router
+.\Run-Hardened.ps1 route status
+.\Run-Hardened.ps1 route auto
+```
+
+Replace the placeholder with an exact ID returned by `route list`. `use PROVIDER` lets the gateway choose a model within that provider. Both `list` and `use` default to **free**. For already-enabled paid access, use `--billing paid_api` or `--billing subscription`; these flags cannot enable billing or override eligibility. `list --billing all` shows all admitted categories. CLI credentials are loaded privately, never supplied as arguments. The selected preference and actual last successful route are separate fields in CLI status and the web console.
+
 ## Claude Code
 
 From any project, run the launcher by its path:

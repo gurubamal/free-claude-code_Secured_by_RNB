@@ -688,6 +688,36 @@ class AutomaticFreePool:
                 return entry
         return None
 
+    @staticmethod
+    def matches_selection(settings, model):
+        return (
+            model.provider_id == settings.routing_selected_provider
+            and model.billing == settings.routing_selected_billing
+            and (
+                settings.routing_selected_model is None
+                or model.model_id == settings.routing_selected_model
+            )
+        )
+
+    def selection_status(self, settings):
+        matches = [m for m in self._catalog if self.matches_selection(settings, m)]
+        disabled = (settings.routing_disabled_providers or "").split(",")
+        return {
+            "mode": "selected" if settings.routing_selected_provider else "automatic",
+            "provider": settings.routing_selected_provider,
+            "model": settings.routing_selected_model,
+            "billing": settings.routing_selected_billing,
+            "fallback": True,
+            "eligible_models": len(matches),
+            "available_models": sum(
+                not self.cooldown(settings, m)
+                and m.provider_id not in disabled
+                and (m.billing != "subscription" or settings.allow_subscription_models)
+                and (m.billing != "paid_api" or settings.allow_paid_api_models)
+                for m in matches
+            ),
+        }
+
     async def select(self, settings, payload):
         await self.refresh(settings)
         context, tools, vision = request_needs(payload)
@@ -760,6 +790,22 @@ class AutomaticFreePool:
             for billing, groups in groups_by_billing.items()
             if groups
         ]
+        if settings.routing_selected_provider:
+            selected = [
+                m
+                for category in categories
+                for m in category
+                if self.matches_selection(settings, m)
+            ]
+            categories = ([selected] if selected else []) + [
+                remaining
+                for category in categories
+                if (
+                    remaining := [
+                        m for m in category if not self.matches_selection(settings, m)
+                    ]
+                )
+            ]
         ordered = []
         for index, category in enumerate(categories):
             budget = 12 - len(ordered) - (len(categories) - index - 1)
@@ -987,12 +1033,24 @@ class AutomaticFreePool:
                     "vision": m.vision,
                     "price_basis": m.price_basis,
                     "billing": m.billing,
+                    "available": (
+                        not self.cooldown(settings, m)
+                        and m.provider_id
+                        not in (settings.routing_disabled_providers or "").split(",")
+                        and (
+                            m.billing != "subscription"
+                            or settings.allow_subscription_models
+                        )
+                        and (m.billing != "paid_api" or settings.allow_paid_api_models)
+                    ),
+                    "cooldown_reason": (self.cooldown(settings, m) or {}).get("reason"),
                 }
                 for m in models
             ]
             rows.append(row)
         return {
             "automatic": settings.auto_free_models,
+            "selection": self.selection_status(settings),
             "free_model_priority": preferred_free_families(
                 settings.free_model_priority
             ),
