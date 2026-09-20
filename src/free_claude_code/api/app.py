@@ -15,6 +15,7 @@ from free_claude_code.application.code_sessions import (
 )
 from free_claude_code.application.errors import ApplicationError
 from free_claude_code.application.free_pool import AutomaticFreePool
+from free_claude_code.application.subscription_catalog import SubscriptionCatalog
 from free_claude_code.core.anthropic import anthropic_error_payload
 from free_claude_code.core.diagnostics import (
     redacted_exception_traceback,
@@ -49,7 +50,7 @@ def create_app(services: ApiServices) -> FastAPI:
     """Create the HTTP adapter around explicitly supplied runtime services."""
     app = FastAPI(title="Claude Code Proxy", version=package_version())
     app.state.services = services
-    app.state.free_pool = AutomaticFreePool()
+    app.state.free_pool = AutomaticFreePool(subscriptions=SubscriptionCatalog(services))
     app.add_middleware(AdminNoStoreMiddleware)
     app.add_middleware(ClientRequestLifetimeMiddleware)
     app.add_middleware(RequestCorrelationMiddleware)

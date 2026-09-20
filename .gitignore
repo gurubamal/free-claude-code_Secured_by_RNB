@@ -11,6 +11,16 @@ __pycache__
 credentials.json
 agent_workspace
 .env
+.env.*
+!.env.example
+!.env.sample
+*.key
+*.pem
+auth.json
+token.json
+tokens.json
+secrets.json
+/private/
 /logs/
 server.log
 /server.*.log

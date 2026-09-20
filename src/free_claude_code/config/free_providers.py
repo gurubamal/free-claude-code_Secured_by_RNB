@@ -76,7 +76,39 @@ FREE_PROVIDERS = (
         "https://github.com/ggml-org/llama.cpp/tree/master/tools/server",
     ),
 )
-POLICY_BY_ID = {p.provider_id: p for p in FREE_PROVIDERS}
+PAID_PROVIDERS = (
+    FreeProviderPolicy(
+        "deepseek", "paid_api", "deepseek", "https://api-docs.deepseek.com/"
+    ),
+    FreeProviderPolicy(
+        "cline_pass", "paid_api", "cline-pass", "https://docs.cline.bot/api/overview"
+    ),
+    FreeProviderPolicy(
+        "commandcode",
+        "paid_api",
+        "commandcode",
+        "https://commandcode.ai/blog/command-code-provider-api",
+    ),
+    FreeProviderPolicy(
+        "kimchi",
+        "paid_api",
+        "kimchi",
+        "https://docs.kimchi.dev/docs/model-apis-overview",
+    ),
+)
+SUBSCRIPTION_PROVIDERS = (
+    FreeProviderPolicy(
+        "openai", "subscription", "openai", "https://learn.chatgpt.com/docs/auth"
+    ),
+    FreeProviderPolicy(
+        "github_copilot",
+        "subscription",
+        "github-copilot",
+        "https://docs.github.com/en/copilot",
+    ),
+)
+ROUTING_PROVIDERS = (*FREE_PROVIDERS, *PAID_PROVIDERS, *SUBSCRIPTION_PROVIDERS)
+POLICY_BY_ID = {p.provider_id: p for p in ROUTING_PROVIDERS}
 
 
 def provider_key(settings, provider_id: str) -> str:

@@ -262,7 +262,14 @@ def prepare_provider(
             from free_claude_code.config.free_providers import POLICY_BY_ID
 
             policy = POLICY_BY_ID.get(provider_id)
-            discovery_only = policy is None
+            discovery_only = (
+                policy is None
+                or (
+                    policy.mode == "subscription"
+                    and not settings.allow_subscription_models
+                )
+                or (policy.mode == "paid_api" and not settings.allow_paid_api_models)
+            )
             base = (
                 local_base(settings, provider_id)
                 if policy is not None and policy.mode == "local"
@@ -282,6 +289,7 @@ def prepare_provider(
             rate_window=config.rate_window,
             max_concurrency=config.max_concurrency,
             max_attempts=1 if settings.auto_free_models else 5,
+            coordinated_recovery=not settings.auto_free_models,
         )
         provider = (
             factory(config, settings, admission)
@@ -289,7 +297,7 @@ def prepare_provider(
             else create_openai_chat_provider(provider_id, config, admission)
         )
         if settings.auto_free_models and provider_id == "open_router":
-            provider._behavior.free_only = True
+            provider._behavior.free_only = not settings.allow_paid_api_models
         if discovery_only:
             from .discovery_only import DiscoveryOnlyProvider
 

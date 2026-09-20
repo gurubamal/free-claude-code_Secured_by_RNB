@@ -16,6 +16,7 @@ class ProviderModelInfo:
     context_window_tokens: int | None = None
     max_output_tokens: int | None = None
     reasoning_capability: ReasoningCapability = ReasoningCapability.UNKNOWN
+    supports_tools: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)

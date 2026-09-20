@@ -126,6 +126,7 @@ async def test_discovery_filters_paid_and_unknown_models_then_enforces_512k(
 @pytest.mark.asyncio
 async def test_gemini_native_header_pagination_and_foreign_link_rejected(monkeypatch):
     pool = AutomaticFreePool()
+    FreeAccountConfirmations().set(Settings(gemini_api_key="synthetic"), "gemini", True)
     seen = []
 
     def serve(req):
@@ -680,6 +681,9 @@ async def test_mistral_primary_limits_override_secondary_capabilities(monkeypatc
         ).encode()
 
     monkeypatch.setattr(pool, "_fetch", fetch)
+    FreeAccountConfirmations().set(
+        Settings(mistral_api_key="synthetic"), "mistral", True
+    )
     models, _ = await pool._discover(
         None,
         Settings(mistral_api_key="synthetic"),

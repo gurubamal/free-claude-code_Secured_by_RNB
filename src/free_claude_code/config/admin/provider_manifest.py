@@ -149,7 +149,7 @@ _PROVIDER_FIELD_OVERRIDES: dict[str, ProviderFieldOverride] = {
     "CLINE_API_KEY": {
         "label": "Cline API Key",
         "description": (
-            "Subscribe to ClinePass, then create a programmatic API key under "
+            "Create a programmatic API key under "
             "Settings > API Keys at app.cline.bot. This is not the Cline CLI's "
             "managed account token."
         ),

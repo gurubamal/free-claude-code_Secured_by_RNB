@@ -50,7 +50,7 @@ def chat_target(settings, model, payload):
         model.output_limit or 8192,
         8192,
     )
-    if model.provider_id == "open_router":
+    if model.provider_id == "open_router" and model.billing == "free":
         body = free_request_body(body, model=model.model_id)
     if model.provider_id == "gemini":
         body["model"] = model.model_id.removeprefix("models/")
@@ -114,7 +114,7 @@ async def free_chat(
     payload = {k: v for k, v in payload.items() if k in _ALLOWED}
     pool = request.app.state.free_pool
     try:
-        models = await pool.select(settings, payload)
+        models = await pool.select(settings, {**payload, "_fcc_wire_api": "chat"})
     except ExecutionFailure as failure:
         return failure_response(failure)
     stream = payload.get("stream") is True
@@ -125,10 +125,11 @@ async def free_chat(
     last = ExecutionFailure(
         FailureKind.UNAVAILABLE,
         503,
-        "Every eligible free fallback is cooling down. See Admin > Automatic free routing.",
+        "Every eligible fallback is cooling down. See Admin > Routing controls.",
         False,
     )
     quota = None
+    request_id = getattr(request.state, "request_id", None)
     handed_off = False
     try:
         for model in models:
@@ -138,6 +139,7 @@ async def free_chat(
             body["stream"] = stream
             quota = None
             try:
+                pool.record_attempt(model, request_id=request_id)
                 response = await client.send(
                     client.build_request("POST", url, headers=headers, json=body),
                     stream=True,
@@ -170,14 +172,14 @@ async def free_chat(
                             if status == 429
                             else FailureKind.UNAVAILABLE,
                             status,
-                            f"Free provider {model.provider_id} rejected this request (HTTP {status}). No paid fallback was enabled.",
+                            f"Provider {model.provider_id} rejected this request (HTTP {status}). Only enabled routing categories may be tried.",
                             False,
                         )
                     )
                     last = replace(
                         last, retry_after_seconds=retry_seconds(response.headers)
                     )
-                    pool.record_failure(settings, model, last)
+                    pool.record_failure(settings, model, last, request_id=request_id)
                     await response.aclose()
                     continue
                 if not stream:
@@ -190,11 +192,17 @@ async def free_chat(
                     result = json.loads(data)
                     if not isinstance(result, dict) or not result.get("choices"):
                         raise ValueError("Invalid chat result")
-                    pool.record_success(model)
+                    pool.record_success(model, request_id=request_id)
                     return JSONResponse(
                         result,
                         headers={
-                            "X-FCC-Free-Provider": model.provider_id,
+                            "X-FCC-Provider": model.provider_id,
+                            "X-FCC-Billing": model.billing,
+                            **(
+                                {"X-FCC-Free-Provider": model.provider_id}
+                                if model.billing == "free"
+                                else {}
+                            ),
                             "Cache-Control": "no-store",
                         },
                     )
@@ -233,7 +241,7 @@ async def free_chat(
                                 "Free provider stream ended without completion.",
                                 False,
                             )
-                        pool.record_success(selected)
+                        pool.record_success(selected, request_id=request_id)
                     except (httpx.HTTPError, ExecutionFailure) as error:
                         failure = (
                             error
@@ -245,7 +253,9 @@ async def free_chat(
                                 False,
                             )
                         )
-                        pool.record_failure(settings, selected, failure)
+                        pool.record_failure(
+                            settings, selected, failure, request_id=request_id
+                        )
                         yield (
                             "data: "
                             + json.dumps(
@@ -268,7 +278,13 @@ async def free_chat(
                     media_type="text/event-stream",
                     headers={
                         "Cache-Control": "no-store",
-                        "X-FCC-Free-Provider": model.provider_id,
+                        "X-FCC-Provider": model.provider_id,
+                        "X-FCC-Billing": model.billing,
+                        **(
+                            {"X-FCC-Free-Provider": model.provider_id}
+                            if model.billing == "free"
+                            else {}
+                        ),
                     },
                 )
             except (
@@ -286,11 +302,11 @@ async def free_chat(
                     else ExecutionFailure(
                         FailureKind.UNAVAILABLE,
                         502,
-                        f"Free provider {model.provider_id} failed before output. No paid fallback was enabled.",
+                        f"Provider {model.provider_id} failed before output. Only enabled routing categories may be tried.",
                         False,
                     )
                 )
-                pool.record_failure(settings, model, last)
+                pool.record_failure(settings, model, last, request_id=request_id)
         return failure_response(last, quota)
     except asyncio.CancelledError:
         if response is not None:

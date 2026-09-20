@@ -1,7 +1,7 @@
 """Isolated production-server + synthetic provider + installed Chrome smoke.
 
 No real keys, home, Chrome profile, provider or broker are used. Ephemeral login
-credentials stay in RAM; screenshots contain only the signed-out login screen.
+credentials stay in RAM; screenshots contain login and synthetic Admin state.
 """
 
 import json
@@ -266,13 +266,11 @@ def main():
                 )
                 policy_note = openai_card.locator('[data-free-policy-note="openai"]')
                 assert policy_note.is_visible()
-                assert (
-                    "not included in automatic free routing" in policy_note.inner_text()
-                )
+                assert "Enable connected subscriptions" in policy_note.inner_text()
                 openai_card.screenshot(path=str(output / "openai-discovery.png"))
                 assert not failures, failures
                 checks.append(
-                    "Chrome connected OpenAI catalog count and separate free-policy exclusion (synthetic state)"
+                    "Chrome connected OpenAI catalog count and paid-access control link (synthetic state)"
                 )
                 page.reload()
                 page.locator("#providerGroups .provider-strip").first.wait_for(
@@ -284,6 +282,22 @@ def main():
                     "refreshed_at": "2026-09-20T08:00:00+00:00",
                     "eligible_models": 2,
                     "available_models": 1,
+                    "last_success_details": {
+                        "provider": "gemini",
+                        "model": "synthetic-512k",
+                        "billing": "free",
+                        "context_tokens": 512000,
+                        "state": "succeeded",
+                        "finished_at": "2026-09-20T08:00:00+00:00",
+                    },
+                    "latest_attempt": {
+                        "provider": "deepseek",
+                        "model": "synthetic-next",
+                        "billing": "paid_api",
+                        "context_tokens": 1000000,
+                        "state": "attempting",
+                        "started_at": "2026-09-20T08:01:00+00:00",
+                    },
                     "note": "Synthetic browser fixture; no real provider credentials.",
                     "providers": [
                         {
@@ -317,8 +331,22 @@ def main():
                     ],
                 }
                 confirmation_requests = []
+                policy_requests = []
 
                 def free_fixture(route):
+                    if route.request.url.endswith("/policy"):
+                        body = route.request.post_data_json
+                        assert body["allow_subscriptions"] is True
+                        assert body["allow_paid_api"] is True
+                        assert body["billing_priority"] == [
+                            "paid_api",
+                            "free",
+                            "subscription",
+                        ]
+                        assert body["provider_priority"] == ["gemini", "open_router"]
+                        assert body["disabled_providers"] == ["open_router"]
+                        policy_requests.append(body)
+                        free_status.update(body)
                     if route.request.url.endswith("/accounts/gemini"):
                         assert route.request.post_data_json == {"no_paid_billing": True}
                         assert route.request.headers["x-fcc-admin"] == "1"
@@ -329,28 +357,57 @@ def main():
                     route.fulfill(json=free_status)
 
                 page.route("**/admin/api/free/**", free_fixture)
+                page.get_by_role("link", name="Routing controls", exact=True).click()
                 page.get_by_role(
-                    "link", name="Automatic free routing", exact=True
-                ).click()
-                page.get_by_role(
-                    "heading", name="Automatic free routing", exact=True
+                    "heading", name="Routing controls", exact=True
                 ).wait_for()
                 page.locator("td").filter(has_text="Cooling down").wait_for()
                 assert page.locator("#eligible").inner_text() == "2"
-                page.get_by_role("checkbox").check()
+                assert (
+                    "gemini / synthetic-512k" in page.locator("#lastRoute").inner_text()
+                )
+                assert (
+                    "deepseek / synthetic-next"
+                    in page.locator("#latestAttempt").inner_text()
+                )
+                page.clock.install()
+                free_status["latest_attempt"].update(state="failed", status_code=503)
+                page.clock.fast_forward(10000)
+                page.locator("#latestAttempt").filter(has_text="HTTP 503").wait_for()
+                page.get_by_label(
+                    "This key belongs to a free account with paid billing disabled.",
+                    exact=True,
+                ).check()
                 page.get_by_text("Eligible", exact=True).wait_for()
                 assert confirmation_requests
                 page.get_by_role("button", name="Refresh catalogs").click()
                 page.locator("#notice").filter(has_text="Catalog checked").wait_for()
-                page.locator("details summary").first.click()
+                page.locator("td details summary").first.click()
                 assert (
                     "1,048,576 context tokens"
-                    in page.locator("details").first.inner_text()
+                    in page.locator("td details").first.inner_text()
                 )
+                page.locator("#allowSubscriptions").check()
+                page.locator("#allowPaidApi").check()
+                page.locator("#billingOrder").select_option(
+                    "paid_api,free,subscription"
+                )
+                page.get_by_text(
+                    "Provider fallback order and exclusions", exact=True
+                ).click()
+                page.get_by_role("button", name="Up Gemini", exact=True).click()
+                page.get_by_role(
+                    "checkbox", name="Use OpenRouter", exact=True
+                ).uncheck()
+                page.get_by_role(
+                    "button", name="Save routing preferences", exact=True
+                ).click()
+                page.locator("#policyNotice").filter(has_text="Saved.").wait_for()
+                assert policy_requests
                 page.screenshot(path=str(output / "free-routing.png"), full_page=True)
                 assert not failures, failures
                 checks.append(
-                    "Chrome free routing status, 512k+ display, account confirmation and refresh (synthetic API fixtures)"
+                    "Chrome route identity and timed refresh, 512k+ display, acknowledgments, paid switches, provider reordering, exclusions and saving (synthetic API fixtures)"
                 )
                 page.goto(url + "/admin")
                 page.locator("#providerGroups .provider-strip").first.wait_for(

@@ -102,11 +102,18 @@ def load_config_response(snapshot: ManagedConfigSnapshot) -> JsonObject:
 
     providers = provider_config_status(state)
     for provider in providers:
-        provider["automatic_free_policy_supported"] = (
-            provider["provider_id"] in POLICY_BY_ID
-        )
+        provider["automatic_free_policy_supported"] = provider[
+            "provider_id"
+        ] in POLICY_BY_ID and POLICY_BY_ID[provider["provider_id"]].mode not in {
+            "subscription",
+            "paid_api",
+        }
+        policy = POLICY_BY_ID.get(provider["provider_id"])
+        provider["automatic_routing_policy"] = policy.mode if policy else None
     return {
         "automatic_free_models": snapshot.settings.auto_free_models,
+        "allow_subscription_models": snapshot.settings.allow_subscription_models,
+        "allow_paid_api_models": snapshot.settings.allow_paid_api_models,
         "sections": [
             {
                 "id": section.section_id,

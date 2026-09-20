@@ -385,8 +385,19 @@ function updateProviderCard(provider) {
     const policyNote = document.createElement("span");
     policyNote.className = "provider-meta";
     policyNote.dataset.freePolicyNote = provider.provider_id;
-    policyNote.textContent = "Catalog discovery only. This provider is not included in automatic free routing; connecting it does not add free fallback capacity.";
+    const subscription = provider.automatic_routing_policy === 'subscription';
+    const paidApi = provider.automatic_routing_policy === 'paid_api';
+    const enabled = subscription ? state.config.allow_subscription_models : paidApi ? state.config.allow_paid_api_models : false;
+    policyNote.textContent = enabled
+      ? 'Allowed for automatic routing when a tool-capable 512k+ model and account capacity are available. Account charges or credits may apply.'
+      : subscription || paidApi
+        ? 'Catalog discovery is available. Enable ' + (subscription ? 'connected subscriptions' : 'paid APIs') + ' in Routing controls to allow eligible 512k+ models; account charges or credits may apply.'
+        : 'Catalog discovery only. This provider is not included in automatic routing.';
     card.insertBefore(policyNote, actions);
+    if (subscription || paidApi) {
+      const routing = document.createElement('a'); routing.href='/admin/free#routingPolicy'; routing.textContent='Routing controls';
+      actions.appendChild(routing);
+    }
   }
   const next = [...grid.children].find((other) => other !== card &&
     connectedAccountName(provider).localeCompare(providerDisplayName(other.dataset.provider), "en", { sensitivity: "base" }) < 0);

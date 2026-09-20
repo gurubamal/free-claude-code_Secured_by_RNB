@@ -3,8 +3,8 @@
     "production server startup",
     "authenticated Anthropic-to-OpenAI synthetic provider roundtrip",
     "Chrome first login, mandatory change and full Admin render",
-    "Chrome connected OpenAI catalog count and separate free-policy exclusion (synthetic state)",
-    "Chrome free routing status, 512k+ display, account confirmation and refresh (synthetic API fixtures)",
+    "Chrome connected OpenAI catalog count and paid-access control link (synthetic state)",
+    "Chrome route identity and timed refresh, 512k+ display, acknowledgments, paid switches, provider reordering, exclusions and saving (synthetic API fixtures)",
     "Chrome existing password change and sign-out",
     "local reset revokes browser session and preserves provider config",
     "configuration restart on a new port preserves credentials and permits sign-in"

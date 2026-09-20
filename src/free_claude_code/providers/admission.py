@@ -415,6 +415,7 @@ class ProviderAdmissionController:
         base_delay: float = DEFAULT_UPSTREAM_BASE_DELAY,
         max_delay: float = DEFAULT_UPSTREAM_MAX_DELAY,
         jitter: float = DEFAULT_UPSTREAM_JITTER,
+        coordinated_recovery: bool = True,
     ) -> None:
         if rate_limit <= 0:
             raise ValueError("rate_limit must be > 0")
@@ -424,6 +425,8 @@ class ProviderAdmissionController:
             raise ValueError("max_concurrency must be > 0")
         if max_attempts <= 0:
             raise ValueError("max_attempts must be > 0")
+        if not coordinated_recovery and max_attempts != 1:
+            raise ValueError("Uncoordinated recovery requires one attempt")
         if base_delay < 0:
             raise ValueError("base_delay must be >= 0")
         if max_delay < base_delay:
@@ -433,6 +436,7 @@ class ProviderAdmissionController:
 
         self._provider_name = provider_name
         self._max_attempts = max_attempts
+        self._coordinated_recovery = coordinated_recovery
         self._base_delay = base_delay
         self._max_delay = max_delay
         self._jitter = jitter
@@ -715,6 +719,11 @@ class ProviderAdmissionController:
         error: Exception,
         status: int | None,
     ) -> None:
+        if not self._coordinated_recovery:
+            # Automatic routing owns model/provider cooldowns. A second shared
+            # circuit here would replay the first error without calling siblings.
+            # Rate limiting and concurrency admission remain active.
+            return
         can_retry = execution.can_attempt
         delay = self._retry_delay(error, execution.attempts_started)
         became_leader = False

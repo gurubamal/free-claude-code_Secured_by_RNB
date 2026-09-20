@@ -71,6 +71,11 @@ from free_claude_code.providers.vertex import VertexProvider
 
 def _make_settings(**overrides):
     mock = MagicMock()
+    # These upstream constructor tests exercise manual provider configuration.
+    # Automatic routing/endpoint restrictions have separate security tests.
+    mock.auto_free_models = False
+    mock.commandcode_api_key = "test_commandcode_key"
+    mock.kimchi_api_key = "test_kimchi_key"
     mock.model = "nvidia_nim/meta/llama3"
     mock.model_fable = None
     mock.model_opus = None
@@ -380,7 +385,7 @@ async def test_cline_pass_provider_config_uses_key_base_and_proxy() -> None:
     with patch("free_claude_code.providers.openai_chat.client.AsyncOpenAI"):
         provider = await create_provider("cline_pass", settings)
 
-    assert descriptor.display_name == "ClinePass"
+    assert descriptor.display_name == "Cline API / ClinePass"
     assert descriptor.credential_env == "CLINE_API_KEY"
     assert descriptor.credential_attr == "cline_api_key"
     assert descriptor.credential_url == "https://app.cline.bot"
@@ -931,6 +936,8 @@ async def test_create_provider_instantiates_each_builtin():
         sambanova_api_key="test_sambanova_key",
     )
     cases = {
+        "commandcode": OpenAIChatProvider,
+        "kimchi": OpenAIChatProvider,
         "nvidia_nim": NvidiaNimProvider,
         "openai": OpenAICodexProvider,
         "github_copilot": GitHubCopilotProvider,
@@ -1031,6 +1038,8 @@ async def test_create_provider_instantiates_each_builtin():
                 rate_limit=7,
                 rate_window=11,
                 max_concurrency=3,
+                max_attempts=5,
+                coordinated_recovery=True,
             )
             admission_factory.reset_mock()
 

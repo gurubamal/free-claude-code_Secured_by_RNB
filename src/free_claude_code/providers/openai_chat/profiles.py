@@ -235,12 +235,34 @@ def _zai_profile(provider_name: str) -> OpenAIChatProfile:
 
 
 OPENAI_CHAT_PROFILES: dict[str, OpenAIChatProfile] = {
+    "commandcode": OpenAIChatProfile(
+        _policy(
+            "COMMANDCODE",
+            ReasoningReplayMode.REASONING_CONTENT,
+            default_max_tokens=ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS,
+        ),
+        NO_REASONING,
+        model_listing=OpenAIModelListing(
+            context_window_tokens_path=("context_length",),
+            required_sequence_items=(("supported_endpoints", "/chat/completions"),),
+        ),
+    ),
+    "kimchi": OpenAIChatProfile(
+        _policy(
+            "KIMCHI",
+            ReasoningReplayMode.REASONING_CONTENT,
+            default_max_tokens=ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS,
+        ),
+        NO_REASONING,
+        model_listing=OpenAIModelListing(
+            context_window_tokens_path=("context_length",)
+        ),
+    ),
     "cline_pass": OpenAIChatProfile(
         _policy("CLINE_PASS", ReasoningReplayMode.DISABLED),
         NO_REASONING,
         model_listing=OpenAIModelListing(
-            path="/ai/cline/recommended-models",
-            collection_field="clinePass",
+            context_window_tokens_path=("context_length",),
         ),
         reasoning_delta_field="reasoning",
         structured_reasoning_details=True,

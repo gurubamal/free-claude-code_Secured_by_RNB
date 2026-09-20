@@ -86,6 +86,43 @@ SECTIONS: tuple[ConfigSectionSpec, ...] = (
 
 _NON_PROVIDER_FIELDS: tuple[ConfigFieldSpec, ...] = (
     ConfigFieldSpec(
+        "ALLOW_SUBSCRIPTION_MODELS",
+        "Allow connected subscriptions",
+        "models",
+        "boolean",
+        settings_attr="allow_subscription_models",
+        description="Opt in to connected ChatGPT/Copilot allowance or credits. Account limits and charges apply. Every route still requires 512k context.",
+    ),
+    ConfigFieldSpec(
+        "ALLOW_PAID_API_MODELS",
+        "Allow paid API routes",
+        "models",
+        "boolean",
+        settings_attr="allow_paid_api_models",
+        description="Opt in to billed API requests on supported providers. Set spending limits with each provider; this gateway has no monetary budget cap.",
+    ),
+    ConfigFieldSpec(
+        "ROUTING_PRIORITY",
+        "Billing priority",
+        "models",
+        settings_attr="routing_priority",
+        description="Comma-separated order of free, subscription, paid_api. Only enabled categories are used.",
+    ),
+    ConfigFieldSpec(
+        "ROUTING_PROVIDER_PRIORITY",
+        "Provider fallback order",
+        "models",
+        settings_attr="routing_provider_priority",
+        description="Provider IDs in preferred order within each billing category. Unlisted providers follow afterward.",
+    ),
+    ConfigFieldSpec(
+        "ROUTING_DISABLED_PROVIDERS",
+        "Excluded routing providers",
+        "models",
+        settings_attr="routing_disabled_providers",
+        description="Comma-separated provider IDs excluded from automatic generation.",
+    ),
+    ConfigFieldSpec(
         "AUTO_FREE_MODELS",
         "Automatic free routing",
         "models",

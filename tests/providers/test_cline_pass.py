@@ -344,7 +344,7 @@ async def test_stream_uses_upstream_sse_and_preserves_reasoning_details(
 
 
 @pytest.mark.asyncio
-async def test_model_catalog_uses_cline_pass_collection_endpoint_and_auth() -> None:
+async def test_model_catalog_uses_documented_api_endpoint_and_auth() -> None:
     requests: list[httpx2.Request] = []
 
     def handler(request: httpx2.Request) -> httpx2.Response:
@@ -354,7 +354,7 @@ async def test_model_catalog_uses_cline_pass_collection_endpoint_and_auth() -> N
             json={
                 "recommended": [{"id": "anthropic/claude-sonnet-4-6"}],
                 "free": [{"id": "cline/free-model"}],
-                "clinePass": [
+                "data": [
                     {"id": "cline-pass/kimi-k3"},
                     {"id": "cline-pass/deepseek-v4-flash"},
                 ],
@@ -377,18 +377,16 @@ async def test_model_catalog_uses_cline_pass_collection_endpoint_and_auth() -> N
         }
     )
     assert len(requests) == 1
-    assert str(requests[0].url) == (
-        "https://api.cline.bot/api/v1/ai/cline/recommended-models"
-    )
+    assert str(requests[0].url) == ("https://api.cline.bot/api/v1/models")
     assert requests[0].headers["authorization"] == "Bearer wire-cline-key"
 
 
 @pytest.mark.parametrize(
     ("payload", "message"),
     [
-        ({"recommended": []}, "top-level clinePass array"),
-        ({"clinePass": []}, "did not include any model ids"),
-        ({"clinePass": [{}]}, "clinePass item to include id"),
+        ({"recommended": []}, "top-level data array"),
+        ({"data": []}, "did not include any model ids"),
+        ({"data": [{}]}, "data item to include id"),
     ],
 )
 @pytest.mark.asyncio
@@ -411,6 +409,6 @@ async def test_model_catalog_rejects_malformed_or_empty_cline_pass_collection(
         await provider.cleanup()
 
     assert [str(request.url) for request in requests] == [
-        "https://api.cline.bot/api/v1/ai/cline/recommended-models"
+        "https://api.cline.bot/api/v1/models"
     ]
     assert requests[0].headers["authorization"] == ("Bearer wire-cline-key")

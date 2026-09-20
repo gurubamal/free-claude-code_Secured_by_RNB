@@ -18,6 +18,37 @@ class FreeAccountPayload(BaseModel):
     no_paid_billing: StrictBool
 
 
+class RoutingPolicyPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    allow_subscriptions: StrictBool
+    allow_paid_api: StrictBool
+    billing_priority: list[str]
+    provider_priority: list[str]
+    disabled_providers: list[str]
+
+
+@router.post("/admin/api/free/policy")
+async def routing_policy(body: RoutingPolicyPayload, request: Request):
+    services = request.app.state.services
+    result = await services.admin.apply_admin_config(
+        {
+            "ALLOW_SUBSCRIPTION_MODELS": body.allow_subscriptions,
+            "ALLOW_PAID_API_MODELS": body.allow_paid_api,
+            "ROUTING_PRIORITY": ",".join(body.billing_priority),
+            "ROUTING_PROVIDER_PRIORITY": ",".join(body.provider_priority) or None,
+            "ROUTING_DISABLED_PROVIDERS": ",".join(body.disabled_providers) or None,
+        }
+    )
+    if result.get("errors"):
+        raise HTTPException(
+            400,
+            "Routing settings were not applied; check the selected priority and provider IDs.",
+        )
+    return await request.app.state.free_pool.status(
+        services.requests.current_settings(), force=True
+    )
+
+
 @router.get("/admin/free", response_class=HTMLResponse)
 async def free_page():
     return (

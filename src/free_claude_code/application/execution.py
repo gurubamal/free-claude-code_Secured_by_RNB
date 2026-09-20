@@ -383,6 +383,10 @@ class ProviderExecutor:
                 candidate_committed = False
                 candidate_failure: ExecutionFailure | None = None
                 try:
+                    if free_model is not None:
+                        self._free_pool.record_attempt(
+                            free_model, request_id=request_id
+                        )
                     opening_started = monotonic()
                     try:
                         provider_stream = await open_candidate(index, target)
@@ -424,7 +428,7 @@ class ProviderExecutor:
                                 candidate_failure = ExecutionFailure(
                                     FailureKind.UPSTREAM,
                                     502,
-                                    "Free provider ended without a complete response.",
+                                    "Provider ended without a complete response.",
                                     False,
                                 )
                             break
@@ -501,11 +505,16 @@ class ProviderExecutor:
 
                 if candidate_failure is None:
                     if free_model is not None:
-                        self._free_pool.record_success(free_model)
+                        self._free_pool.record_success(
+                            free_model, request_id=request_id
+                        )
                     return
                 if free_model is not None:
                     self._free_pool.record_failure(
-                        self._free_settings, free_model, candidate_failure
+                        self._free_settings,
+                        free_model,
+                        candidate_failure,
+                        request_id=request_id,
                     )
                 last_failure = candidate_failure
                 if candidate_committed or index + 1 >= len(candidates):
@@ -528,7 +537,7 @@ class ProviderExecutor:
                 raise ExecutionFailure(
                     FailureKind.UNAVAILABLE,
                     503,
-                    "Every eligible free fallback failed or is cooling down. Resume the saved session after capacity returns; see Admin > Automatic free routing.",
+                    "Every eligible fallback failed or is cooling down. Resume the saved session after capacity returns; see Admin > Routing controls.",
                     False,
                 )
 

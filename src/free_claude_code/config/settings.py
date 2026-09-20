@@ -253,6 +253,12 @@ class Settings(BaseModel):
     cline_api_key: OptionalNonEmptyString = Field(
         default=None, validation_alias="CLINE_API_KEY"
     )
+    commandcode_api_key: OptionalNonEmptyString = Field(
+        default=None, validation_alias="COMMANDCODE_API_KEY"
+    )
+    kimchi_api_key: OptionalNonEmptyString = Field(
+        default=None, validation_alias="KIMCHI_API_KEY"
+    )
 
     # ==================== xAI / Grok (OpenAI-compatible) ====================
     xai_api_key: OptionalNonEmptyString = Field(
@@ -373,6 +379,43 @@ class Settings(BaseModel):
         validation_alias="MODEL",
     )
     auto_free_models: bool = Field(default=True, validation_alias="AUTO_FREE_MODELS")
+    allow_subscription_models: bool = Field(
+        default=False, validation_alias="ALLOW_SUBSCRIPTION_MODELS"
+    )
+    allow_paid_api_models: bool = Field(
+        default=False, validation_alias="ALLOW_PAID_API_MODELS"
+    )
+    routing_priority: NonEmptyString = Field(
+        default="free,subscription,paid_api", validation_alias="ROUTING_PRIORITY"
+    )
+    routing_provider_priority: OptionalNonEmptyString = Field(
+        default=None, validation_alias="ROUTING_PROVIDER_PRIORITY"
+    )
+    routing_disabled_providers: OptionalNonEmptyString = Field(
+        default=None, validation_alias="ROUTING_DISABLED_PROVIDERS"
+    )
+
+    @field_validator("routing_priority")
+    @classmethod
+    def validate_routing_priority(cls, value):
+        items = [item.strip() for item in value.split(",")]
+        if len(items) != 3 or set(items) != {"free", "subscription", "paid_api"}:
+            raise ValueError(
+                "Order must contain free, subscription and paid_api exactly once"
+            )
+        return ",".join(items)
+
+    @field_validator("routing_provider_priority", "routing_disabled_providers")
+    @classmethod
+    def validate_routing_providers(cls, value):
+        if value is None:
+            return None
+        items = [item.strip() for item in value.split(",")]
+        if len(items) != len(set(items)) or any(
+            item not in SUPPORTED_PROVIDER_IDS for item in items
+        ):
+            raise ValueError("Use unique provider IDs from the provider catalog")
+        return ",".join(items)
 
     # Per-model overrides (optional, use MODEL when unset)
     # Each can use a different provider

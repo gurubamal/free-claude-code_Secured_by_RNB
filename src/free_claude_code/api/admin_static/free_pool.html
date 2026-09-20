@@ -1,21 +1,111 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Automatic free routing · FCC Hardened</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Routing controls · FCC Hardened</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,sans-serif;background:#101722;color:#e8eef7}body{max-width:1200px;margin:40px auto;padding:0 24px}a{color:#88c5ff}h1{font-size:30px;margin-bottom:8px}p{line-height:1.55;color:#b9c7d9}.summary{display:flex;gap:24px;flex-wrap:wrap;margin:28px 0}.card{background:#192536;border:1px solid #31435b;border-radius:12px;padding:18px;min-width:150px}.card strong{display:block;font-size:30px;margin-bottom:6px}button{background:#265895;color:white;border:0;border-radius:7px;padding:10px 16px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}table{width:100%;border-collapse:collapse}th,td{text-align:left;vertical-align:top;padding:14px 10px;border-bottom:1px solid #304056}th{color:#9eb4ce}td small{display:block;color:#b9c7d9;margin-top:7px;max-width:410px}details{max-width:400px;overflow-wrap:anywhere}summary{cursor:pointer}#notice{min-height:25px}label{display:block;max-width:320px;line-height:1.4}input{margin-right:8px}.scroll{overflow:auto}footer{padding:22px 0;color:#b9c7d9}
 </style></head><body>
 <a href="/admin">← Back to Admin and provider keys</a>
-<h1>Automatic free routing</h1>
-<p>One route for your coding assistant. Models are discovered automatically and filtered for free access, tool support and at least 512,000 context tokens. Each request must also fit the selected model. Failed providers cool down; another eligible provider takes over before output starts.</p>
+<h1>Routing controls</h1>
+<p>Choose allowed billing categories and fallback priority. Every route requires known tool support, at least 512,000 context tokens and room for your request. Failed providers cool down; the next eligible provider takes over before output starts.</p>
+<section class="card" aria-labelledby="activityTitle" style="margin:20px 0">
+<h2 id="activityTitle">Actual gateway route</h2>
+<h3>Last successful route</h3><p id="lastRoute">No successful request recorded since server restart.</p>
+<h3>Latest attempt</h3><p id="latestAttempt">No attempt recorded since server restart.</p>
+<p id="activityUpdated" role="status"></p>
+<small>Updates every 10 seconds while this page is visible. This shows gateway records across connected clients. The CLI model label can be a fixed alias. An attempt is not proof of completed output; an interrupted connection may remain the latest attempt.</small>
+</section>
+<section class="card" id="routingPolicy" aria-labelledby="policyTitle">
+<h2 id="policyTitle">Paid access and priority</h2>
+<label style="max-width:none"><input type="checkbox" id="allowSubscriptions">Allow connected subscriptions (ChatGPT / GitHub Copilot)</label>
+<p>Uses the connected account's allowance or purchased credits. A successful login does not guarantee a 512k+ model.</p>
+<label style="max-width:none"><input type="checkbox" id="allowPaidApi">Allow paid API routes</label>
+<p>Requests can incur provider charges. Set spending limits with each provider; this gateway has no monetary budget cap. These switches do not purchase credits or bypass account limits.</p>
+<label>Billing order <select id="billingOrder">
+<option value="free,subscription,paid_api">Free → subscriptions → paid APIs</option>
+<option value="free,paid_api,subscription">Free → paid APIs → subscriptions</option>
+<option value="subscription,free,paid_api">Subscriptions → free → paid APIs</option>
+<option value="subscription,paid_api,free">Subscriptions → paid APIs → free</option>
+<option value="paid_api,free,subscription">Paid APIs → free → subscriptions</option>
+<option value="paid_api,subscription,free">Paid APIs → subscriptions → free</option>
+</select></label>
+<p>Move providers up or down to choose priority within each billing category. Uncheck a provider to exclude it. Within each category, try providers in order before their sibling models. Each request considers up to 12 candidates, reserving a slot for every eligible billing category.</p>
+<details style="max-width:none;margin:18px 0"><summary>Provider fallback order and exclusions</summary><ol id="providerOrder" aria-label="Provider fallback priority"></ol></details>
+<button id="savePolicy" type="button">Save routing preferences</button><p id="policyNotice" role="status"></p>
+</section>
 <div class="summary"><div class="card"><strong id="eligible">—</strong>Eligible models</div><div class="card"><strong id="available">—</strong>Outside cooldown</div><div class="card"><strong id="providers">—</strong>Providers with eligible models</div></div>
 <button id="refresh" type="button">Refresh catalogs</button><p id="notice" role="status">Loading provider status…</p>
 <div class="scroll"><table><thead><tr><th>Provider</th><th>Status</th><th>Models</th><th>Setup</th></tr></thead><tbody id="rows"></tbody></table></div>
 <p id="note"></p><footer>Catalog checks do not guarantee availability or model quality. Each service controls its own quotas and data policy. Credentials are entered in Providers and stored using the installation’s protected storage. Refreshing this page does not reset a provider’s quota.</footer>
 <script>
 const el=id=>document.getElementById(id);
-const labels={MISSING_KEY:'Add API key',CONFIRM_FREE_ACCOUNT:'Confirm free account',ELIGIBLE:'Eligible',COOLDOWN:'Cooling down',NO_ELIGIBLE_MODELS:'No eligible 512k+ models',DISCOVERY_REJECTED:'Catalog access rejected',DISCOVERY_UNAVAILABLE:'Catalog unavailable'};
+const labels={MISSING_KEY:'Add API key',CONFIRM_FREE_ACCOUNT:'Confirm free account',ELIGIBLE:'Eligible',COOLDOWN:'Cooling down',NO_ELIGIBLE_MODELS:'No eligible 512k+ models',DISCOVERY_REJECTED:'Catalog access rejected',DISCOVERY_UNAVAILABLE:'Catalog unavailable',DISABLED:'Billing category disabled',CONNECT_ACCOUNT:'Connect account',EXCLUDED:'Excluded by your preference'};
 function node(tag,text){const n=document.createElement(tag);n.textContent=text;return n}
+function describeRoute(route){return route.provider+' / '+route.model+' · '+route.billing.replaceAll('_',' ')+' · '+route.context_tokens.toLocaleString()+' context tokens · '+route.state+(route.status_code?' (HTTP '+route.status_code+')':'')+' · '+new Date(route.finished_at||route.started_at).toLocaleString()}
+function renderActivity(data){
+ el('lastRoute').textContent=data.last_success_details?describeRoute(data.last_success_details):data.last_success||'No successful request recorded since server restart.';
+ el('latestAttempt').textContent=data.latest_attempt?describeRoute(data.latest_attempt):'No attempt recorded since server restart.';
+ el('activityUpdated').textContent='Route status checked '+new Date().toLocaleTimeString();
+}
 async function api(path,body){const r=await fetch(path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-FCC-Admin':'1'},body:body===undefined?undefined:JSON.stringify(body)});if(r.status===401){location.href='/admin/login';throw Error('Sign in required')}const data=await r.json();if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:'Request failed');return data}
-function render(data){el('eligible').textContent=data.eligible_models;el('available').textContent=data.available_models;el('providers').textContent=data.providers.filter(x=>x.models>0).length;el('note').textContent=data.note;el('notice').textContent=(data.automatic?'Automatic routing enabled. ':'Automatic routing disabled in settings. ')+'Catalog checked '+new Date(data.refreshed_at).toLocaleString();el('rows').replaceChildren();for(const p of data.providers){const tr=node('tr',''),name=node('td',p.name),state=node('td',labels[p.state]||p.state),models=node('td',String(p.models)),setup=node('td','');if(p.retry_at)state.append(node('small','Retry check: '+new Date(p.retry_at).toLocaleString()));if(p.http_status)state.append(node('small','HTTP '+p.http_status));if(p.coverage==='PARTIAL')state.append(node('small','Partial catalog coverage'));if(p.model_ids.length){const d=node('details','');d.append(node('summary','Show models'),node('p',(p.model_details||p.model_ids.map(id=>({id}))).map(m=>m.id+(m.context_tokens?' — '+m.context_tokens.toLocaleString()+' context tokens':'')).join('; ')));models.append(d)}if(p.mode==='free_account'){const label=node('label',''),check=document.createElement('input');check.type='checkbox';check.checked=p.account_confirmed===true;check.disabled=p.state==='MISSING_KEY';label.append(check,document.createTextNode('This key belongs to a free account with paid billing disabled.'));check.addEventListener('change',async()=>{check.disabled=true;try{render(await api('/admin/api/free/accounts/'+encodeURIComponent(p.provider),{no_paid_billing:check.checked}))}catch(e){el('notice').textContent=e.message;check.checked=!check.checked;check.disabled=false}});setup.append(label,node('small','Account status is your acknowledgment; the app cannot independently verify billing. Changing the key requires confirmation again.'))}else setup.append(node('small',p.mode==='local'?'Load a local tool-capable model with an explicit context size of at least 512,000 tokens.':p.state==='MISSING_KEY'?'Add your key in Providers. Models are selected automatically.':'Only currently verified free routes are eligible.'));const a=node('a','Provider documentation');a.href=p.source;a.target='_blank';a.rel='noopener noreferrer';setup.append(document.createElement('br'),a);tr.append(name,state,models,setup);el('rows').append(tr)}}
+function render(data){
+ renderActivity(data);
+ el('eligible').textContent=data.eligible_models;el('available').textContent=data.available_models;
+ el('providers').textContent=data.providers.filter(x=>x.models>0).length;el('note').textContent=data.note;
+ el('notice').textContent=(data.automatic?'Automatic routing enabled. ':'Automatic routing disabled in settings. ')+'Catalog checked '+new Date(data.refreshed_at).toLocaleString();
+ el('rows').replaceChildren();
+ for(const p of data.providers){
+  const tr=node('tr',''),name=node('td',p.name),state=node('td',labels[p.state]||p.state),models=node('td',String(p.models)),setup=node('td','');
+  if(p.retry_at)state.append(node('small','Retry check: '+new Date(p.retry_at).toLocaleString()));
+  if(p.cooldown_reasons?.length)state.append(node('small',p.cooldown_reasons.map(x=>x.replaceAll('_',' ')).join('; ')));
+  if(p.http_status)state.append(node('small','HTTP '+p.http_status));
+  if(p.coverage==='PARTIAL')state.append(node('small','Partial catalog coverage'));
+  if(p.below_context_minimum)state.append(node('small',p.below_context_minimum+' catalog models have default context below 512,000. Experimental maxima are not used.'));
+  if((p.model_ids||[]).length){const d=node('details','');d.append(node('summary','Show models'),node('p',(p.model_details||p.model_ids.map(id=>({id}))).map(m=>m.id+(m.context_tokens?' — '+m.context_tokens.toLocaleString()+' context tokens':'')+(m.billing?' · '+m.billing.replace('_',' '):'')).join('; ')));models.append(d)}
+  if(p.mode==='free_account'){
+   const label=node('label',''),check=document.createElement('input');check.type='checkbox';check.checked=p.account_confirmed===true;check.disabled=p.state==='MISSING_KEY';
+   label.append(check,document.createTextNode('This key belongs to a free account with paid billing disabled.'));
+   check.addEventListener('change',async()=>{check.disabled=true;try{render(await api('/admin/api/free/accounts/'+encodeURIComponent(p.provider),{no_paid_billing:check.checked}))}catch(e){el('notice').textContent=e.message;check.checked=!check.checked;check.disabled=false}});
+   setup.append(label,node('small','Without this acknowledgment, the key is considered only when paid APIs are enabled. Account billing is not independently verified.'));
+  }else if(p.mode==='subscription')setup.append(node('small','Connect this account in Providers and enable subscriptions above. Supports Messages and Responses; Chat Completions uses API-key routes.'));
+  else if(p.mode==='paid_api')setup.append(node('small','Save an API key in Providers and enable paid APIs above. Account charges or credits may apply.'));
+  else setup.append(node('small',p.mode==='local'?'Load a local tool-capable model with at least 512,000 context tokens.':p.state==='MISSING_KEY'?'Add your key in Providers. Models are selected automatically.':'Models are separated by free or paid eligibility and your saved routing policy.'));
+  const a=node('a','Provider documentation');a.href=p.source;a.target='_blank';a.rel='noopener noreferrer';setup.append(document.createElement('br'),a);
+  tr.append(name,state,models,setup);el('rows').append(tr);
+ }
+}
 el('refresh').onclick=async()=>{el('refresh').disabled=true;el('notice').textContent='Checking current catalogs…';try{render(await api('/admin/api/free/refresh',{}))}catch(e){el('notice').textContent=e.message}finally{el('refresh').disabled=false}};
-api('/admin/api/free/status').then(render).catch(e=>el('notice').textContent=e.message);
+let policyProviders=[];
+function renderPolicy(data){
+ el('allowSubscriptions').checked=data.allow_subscriptions===true;
+ el('allowPaidApi').checked=data.allow_paid_api===true;
+ el('billingOrder').value=(data.billing_priority||['free','subscription','paid_api']).join(',');
+ const priority=data.provider_priority||[],disabled=new Set(data.disabled_providers||[]);
+ policyProviders=[...data.providers].sort((a,b)=>{
+  const ai=priority.indexOf(a.provider),bi=priority.indexOf(b.provider);
+  return (ai<0?999:ai)-(bi<0?999:bi);
+ }).map(p=>({...p,enabled:!disabled.has(p.provider)}));
+ drawOrder();
+}
+function drawOrder(){el('providerOrder').replaceChildren();policyProviders.forEach((p,index)=>{
+ const row=node('li',''),label=node('label',''),check=document.createElement('input');
+ row.style.margin='8px 0';label.style.display='inline-block';label.style.width='260px';
+ check.type='checkbox';check.checked=p.enabled;check.setAttribute('aria-label','Use '+p.name);
+ check.onchange=()=>p.enabled=check.checked;label.append(check,document.createTextNode(p.name));row.append(label);
+ for(const [name,offset] of [['Up',-1],['Down',1]]){
+  const b=node('button',name);b.type='button';b.style.marginRight='6px';b.setAttribute('aria-label',name+' '+p.name);
+  b.disabled=index+offset<0||index+offset>=policyProviders.length;
+  b.onclick=()=>{[policyProviders[index],policyProviders[index+offset]]=[policyProviders[index+offset],policyProviders[index]];drawOrder()};row.append(b);
+ }
+ el('providerOrder').append(row);
+})}
+el('savePolicy').onclick=async()=>{el('savePolicy').disabled=true;el('policyNotice').textContent='Saving preferences and checking catalogs…';
+ try{const data=await api('/admin/api/free/policy',{
+  allow_subscriptions:el('allowSubscriptions').checked,allow_paid_api:el('allowPaidApi').checked,
+  billing_priority:el('billingOrder').value.split(','),provider_priority:policyProviders.map(p=>p.provider),
+  disabled_providers:policyProviders.filter(p=>!p.enabled).map(p=>p.provider)
+ });render(data);renderPolicy(data);el('policyNotice').textContent='Saved. New requests follow this policy. Requests already producing output are not replayed.'}
+ catch(e){el('policyNotice').textContent=e.message}finally{el('savePolicy').disabled=false}
+};
+api('/admin/api/free/status').then(data=>{render(data);renderPolicy(data)}).catch(e=>el('notice').textContent=e.message);
+let activityLoading=false;
+setInterval(async()=>{if(document.hidden||activityLoading)return;activityLoading=true;try{renderActivity(await api('/admin/api/free/status'))}catch(e){el('activityUpdated').textContent='Route status unavailable: '+e.message}finally{activityLoading=false}},10000);
 </script></body></html>

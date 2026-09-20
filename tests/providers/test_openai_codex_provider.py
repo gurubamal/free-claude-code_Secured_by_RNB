@@ -266,6 +266,9 @@ async def test_provider_uses_subscription_headers_and_visible_model_catalog() ->
     def handler(request: httpx2.Request) -> httpx2.Response:
         requests.append(request)
         if request.url.path.endswith("/models"):
+            import re
+
+            assert re.fullmatch(r"\d+\.\d+\.\d+", request.url.params["client_version"])
             return httpx2.Response(
                 200,
                 json={

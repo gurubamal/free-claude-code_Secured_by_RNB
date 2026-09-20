@@ -1,6 +1,7 @@
 """ChatGPT Codex provider backed by shared SDK Responses execution."""
 
 import asyncio
+import re
 import sys
 import uuid
 from collections.abc import AsyncIterator, Mapping
@@ -39,6 +40,11 @@ try:
     FCC_VERSION = version("free-claude-code")
 except PackageNotFoundError:
     FCC_VERSION = "dev"
+
+# The catalog endpoint accepts a numeric version, not Python local-version tags.
+# Keep the full package identity in User-Agent; do not impersonate another client.
+_version_match = re.match(r"^(\d+\.\d+\.\d+)(?:[+.-]|$)", FCC_VERSION)
+CATALOG_CLIENT_VERSION = _version_match.group(1) if _version_match else "0.0.0"
 
 
 class OpenAICodexProvider(BaseProvider):
@@ -126,7 +132,7 @@ class OpenAICodexProvider(BaseProvider):
                     payload = await client.get(
                         "models",
                         cast_to=object,
-                        options={"params": {"client_version": FCC_VERSION}},
+                        options={"params": {"client_version": CATALOG_CLIENT_VERSION}},
                     )
                     await attempt.accept()
                     execution.succeed()
@@ -240,6 +246,10 @@ def _model_infos(payload: Any) -> frozenset[ProviderModelInfo]:
                 context_window_tokens=optional_positive_int(
                     model.get("context_window")
                 ),
+                supports_tools=True
+                if model.get("shell_type")
+                in {"shell_command", "local_shell", "unified_exec"}
+                else None,
             )
         )
     if not infos:

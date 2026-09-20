@@ -1,25 +1,29 @@
-# Automatic free routing
+# Automatic routing: free first, optional paid fallback
 
-Policy updated 2026-09-20. The user-requested minimum is **512,000 context tokens** (decimal 512k). This applies to every primary and fallback model, including local models. A large context window is not a daily token allowance, an output allowance, or evidence of good coding quality.
+Policy updated 2026-09-20. The minimum is **512,000 context tokens** (decimal 512k) for every primary and fallback, including paid, subscription and local models. An experimental maximum does not replace the provider's active default limit. Context size is not a daily allowance, output allowance or evidence of coding quality.
 
 ## Setup
 
+For a visual walkthrough of provider configuration, see the [Admin screenshot guide](docs/ADMIN_GUIDE.md). Its provider catalog counts are separate from the eligible-model counts on the automatic routing page.
+
 1. Keep `AUTO_FREE_MODELS=true` in Admin.
 2. Add and save your own provider keys in **Providers**. Do not paste keys into issues or chat.
-3. Open **Automatic free routing** (`/admin/free`). For account-dependent tiers, confirm that the saved key belongs to a free account with paid billing disabled.
-4. Refresh catalogs. Eligible models require free access, known tool support and at least 512k context. A provider can have a valid free account and still have no qualifying models.
+3. Open **Routing controls** (`/admin/free`). For account-dependent free tiers, confirm that the saved key belongs to a free account with paid billing disabled.
+4. Optionally enable **Allow connected subscriptions** and/or **Allow paid API routes**. Both default off. Choose the category order, move providers up/down, exclude unwanted providers and **Save routing preferences**.
+5. Refresh catalogs and review eligibility. Known tool support, 512k+ context and request fit are required. A valid account may still have no eligible or available models.
+6. Use **Actual gateway route** to see the real provider/model, billing category, context, latest attempt and last successful completion. It updates every ten seconds while visible. Records are in memory and reset on restart; an interrupted connection can leave an unfinished latest attempt. CLI model labels may show a fixed alias.
 
-Acknowledgments bind to the credential fingerprint; changing the key requires a new acknowledgment. Revoke it before enabling paid billing. The app cannot independently prove these account billing settings. Saving a key does not purchase credits, upgrade a plan or create an account.
+Acknowledgments bind to the key fingerprint; changing the key requires a new acknowledgment. Revoke it before enabling paid billing. An unconfirmed account-dependent key is considered only as paid access when that category is enabled. The app cannot independently prove these billing settings. Saving a key does not purchase credits, upgrade a plan or create an account. **There is no monetary budget cap in this gateway**; use each provider's spending controls. Subscription access can consume account allowance or purchased credits.
 
 ## Provider policies
 
 These are discovery integrations, not a claim that all providers are configured, quota-available or have a qualifying model today.
 
-Providers outside the table, including **OpenAI / ChatGPT**, support account/catalog checks but cannot generate through automatic free routing. The Admin card shows this distinction even when model discovery succeeds. OpenAI's ChatGPT sign-in and API-key billing are separate authentication paths; see [OpenAI authentication](https://learn.chatgpt.com/docs/auth). This fork does not infer free eligibility from a successful sign-in or a model name. No OpenAI plan or account allowance was validated for this pool.
+Providers outside these tables remain outside automatic routing. Catalog visibility alone does not authorize generation. The following hosted policies may also supply paid candidates when explicitly enabled; free admission remains separately checked.
 
 | Provider | Admission basis | Primary reference |
 | --- | --- | --- |
-| OpenRouter | All published token prices and surcharges zero; additional request-level zero-price ceilings | [Limits](https://openrouter.ai/docs/api/reference/limits), [model catalog](https://openrouter.ai/api/v1/models) |
+| OpenRouter | All published prices zero; request-level zero-price ceilings. In mixed mode, explicit `:free` models form the free group. Other models require paid opt-in. | [Limits](https://openrouter.ai/docs/api/reference/limits), [model catalog](https://openrouter.ai/api/v1/models) |
 | NVIDIA NIM | Saved key plus free-account / no-paid-billing acknowledgment | [API quickstart](https://docs.api.nvidia.com/nim/docs/api-quickstart) |
 | Groq | Saved key plus free-account / no-paid-billing acknowledgment | [Rate limits](https://console.groq.com/docs/rate-limits) |
 | Cerebras | Saved key plus free-account / no-paid-billing acknowledgment | [Rate limits](https://inference-docs.cerebras.ai/support/rate-limits) |
@@ -28,10 +32,21 @@ Providers outside the table, including **OpenAI / ChatGPT**, support account/cat
 | Kilo | Explicit model with all published prices zero; opaque `kilo-auto/free` excluded under the context requirement | [Gateway](https://kilo.ai/docs/gateway) |
 | OpenCode Zen | Intersection of live catalog and primary documentation's free pricing + Chat endpoint tables | [Zen](https://opencode.ai/docs/zen/) |
 | ZenMux | All published prompt/completion pricing tiers and surcharges zero | [Pricing](https://zenmux.ai/docs/about/pricing-and-cost.html) |
-| SiliconFlow | Explicit zero prices required in catalog; absent pricing means excluded | [Models API](https://docs.siliconflow.com/en/api-reference/models/get-model-list) |
+| SiliconFlow | Explicit zero catalog prices for free admission; unknown/nonzero prices require paid opt-in | [Models API](https://docs.siliconflow.com/en/api-reference/models/get-model-list) |
 | Ollama | Installed local tool-capable model, explicit configured context; cloud models excluded | [Model information](https://docs.ollama.com/api/show) |
 | LM Studio | Loopback catalog explicitly supplies tool support and loaded context | [REST API](https://lmstudio.ai/docs/developer/rest/list) |
 | llama.cpp | Loopback catalog explicitly supplies tool support and context | [Server](https://github.com/ggml-org/llama.cpp/tree/master/tools/server) |
+
+| Additional provider | Required opt-in and interface scope | Primary reference |
+| --- | --- | --- |
+| DeepSeek | Paid API; existing native adapter in automatic selection | [DeepSeek API](https://api-docs.deepseek.com/api/create-chat-completion/) |
+| Cline API / ClinePass | Paid API; API key and documented `/models` + Chat endpoints; internal provider ID remains `cline_pass` | [Cline API](https://docs.cline.bot/api/overview) |
+| Command Code | Paid API; `https://api.commandcode.ai/provider/v1`; only catalog entries explicitly supporting `/chat/completions`. Anthropic-only entries are excluded. | [Provider API](https://commandcode.ai/blog/command-code-provider-api) |
+| Kimchi | Paid API; `https://llm.kimchi.dev/openai/v1`; missing context/tool metadata excludes models | [Quickstart](https://docs.kimchi.dev/docs/inference-quickstart) |
+| OpenAI / ChatGPT | Connected subscription; Messages/Responses only; primary default context must meet 512k | [Authentication](https://learn.chatgpt.com/docs/auth) |
+| GitHub Copilot | Connected subscription; Messages/Responses only; same tool/context checks | [Copilot documentation](https://docs.github.com/en/copilot) |
+
+The four API-key integrations use the paid switch even when a plan includes credits; connecting these accounts does not establish free capacity. Cline's catalog may omit capabilities, requiring matching registry metadata. Cline and Command Code can use exact model-ID matches from the OpenRouter registry for missing capabilities and limits; primary gateway context takes precedence. These integrations do not install the providers' native coding harnesses.
 
 Discovery uses current provider catalogs. Where they omit capabilities, the [models.dev registry](https://models.dev/) is a secondary source for tool support, modality and limits; it never independently authorizes free billing. Models missing required capability evidence are excluded. Primary provider limits take precedence. The UI shows model IDs and context sizes, but eligibility remains a catalog assessment rather than a successful inference test.
 
@@ -39,19 +54,19 @@ Local discovery does not install, download or load a new model. A server exposin
 
 ## Selection and failures
 
-- Catalog cache: five minutes; key or account-acknowledgment changes invalidate it. Explicit refresh does not reset provider quota.
+- Catalog cache: five minutes; credentials, account acknowledgments and billing-switch changes invalidate it. Explicit refresh does not reset quota.
 - Bounded discovery: eight pages per catalog, 16 MiB per response, 25 seconds per provider, four concurrent provider discovery operations. Catalog metadata has a 12-second fetch deadline.
 - Request fit: conservative UTF-8 byte estimate plus capped output; no history truncation. A provider tokenizer can still reject a request. Such a failure is handled before output when possible.
-- Candidate order: last successful eligible model first; then independent providers before additional sibling models, using context and a coding-name heuristic. This is not benchmarked model ranking.
-- At most 12 candidates per request. Messages/Responses use a single provider admission attempt; Chat has one send per candidate. The gateway limits upstream reads/progress; provider startup and cleanup have separate runtime budgets.
-- HTTP 429 creates a provider cooldown; authentication/billing failures cool the provider longer; model access/request incompatibility creates a model-specific cooldown. Upstream retry hints can extend the default delay. Reported OpenRouter daily exhaustion disables all its models until the reported reset. A read-only OpenRouter key check also detects zero remaining daily requests before generation. If no reset was reported, the gateway checks again after five minutes; that is a retry check, not a claimed quota reset.
+- Candidate order: saved billing categories first; within a category, providers in saved order before additional sibling models. Last success only breaks ties within a provider, followed by context and a coding-name heuristic. This is not benchmarked model ranking.
+- At most 12 candidates per request, reserving one slot for every later eligible category so a large free catalog cannot hide paid fallback. The selected candidates run in category order. Messages/Responses use one provider admission attempt; Chat has one send per candidate. Automatic mode owns cooldowns; the provider's separate recovery circuit is disabled while rate/concurrency admission remains active.
+- HTTP 429 creates a provider/billing cooldown; authentication or balance failures cool that scope longer. Model access/request incompatibility and temporary 5xx failures cool the affected model, allowing siblings. Upstream retry hints can extend the delay. OpenRouter daily exhaustion blocks its free routes, while a read-only paid-balance check separately skips unfunded paid routes. Without a reported reset, the five-minute check is a retry check, not a promised quota reset.
 - Cooldowns persist across daemon restarts and are scoped to the provider credential. Changing a key is not a way to reset an account quota.
 - Fallback stops as soon as output has been emitted. Interrupted streams return an error, without replaying a possibly executed tool call. Clients must preserve sessions and resume after capacity returns.
 
-The gateway alias remains `open_router/openrouter/free` so existing launchers keep working. It is no longer a promise to call OpenRouter's opaque free router. Client model names and manual fallback lists do not override automatic selection. Responses supports streaming only; the other two interfaces support their documented stream/non-stream modes.
+The alias remains `open_router/openrouter/free` for launcher compatibility; explicit paid opt-ins may route it to paid models. Client names and manual fallback lists do not override automatic selection. Responses supports streaming only. Chat Completions excludes connected subscriptions and uses API-key/local routes; Messages and Responses can use eligible subscriptions. Existing harnesses remain responsible for tool execution and session persistence.
 
 ## Limits
 
-The proxy cannot create unlimited free capacity. All qualifying providers may be exhausted or unavailable at once. The 512k minimum intentionally excludes otherwise usable smaller models. The app does not silently relax it.
+The proxy cannot create unlimited capacity. All qualifying providers can be exhausted or unavailable together. In that case it reports failure rather than looping indefinitely or hiding failed output. The 512k floor intentionally excludes smaller models and is never silently relaxed. A paid switch is permission to use available paid access, not proof of funds or model access.
 
 OpenRouter supports a per-request price ceiling. Other providers rely on current published pricing or your account-billing acknowledgment; pricing/tier changes between checks remain a risk. Hosted providers receive the prompts and code routed to them under their respective data policies. No API key, account response or prompt is included in the public validation artifacts.

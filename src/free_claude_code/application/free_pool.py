@@ -1,4 +1,4 @@
-"""Fresh free-model discovery, capability selection, and shared provider cooldowns."""
+"""Free-default discovery, opt-in billing routes, and shared failure cooldowns."""
 
 import asyncio
 import hashlib
@@ -15,8 +15,8 @@ from urllib.parse import urlencode, urljoin, urlsplit
 import httpx
 
 from free_claude_code.config.free_providers import (
-    FREE_PROVIDERS,
     POLICY_BY_ID,
+    ROUTING_PROVIDERS,
     explicitly_zero_priced,
     provider_key,
     zen_free_chat_ids,
@@ -51,6 +51,14 @@ class FreeModel:
     @property
     def ref(self):
         return f"{self.provider_id}/{self.model_id}"
+
+    @property
+    def billing(self):
+        return (
+            self.price_basis
+            if self.price_basis in {"subscription", "paid_api"}
+            else "free"
+        )
 
 
 def positive_int(value):
@@ -93,7 +101,9 @@ def request_needs(payload):
 
 
 class AutomaticFreePool:
-    def __init__(self):
+    def __init__(self, *, subscriptions=None):
+        self._subscriptions = subscriptions
+        self._connected = {}
         self._lock = asyncio.Lock()
         self._catalog = ()
         self._reports = []
@@ -102,6 +112,8 @@ class AutomaticFreePool:
         self._settings = None
         self._cooldowns = {}
         self._last_success = None
+        self._last_success_details = None
+        self._last_attempt = None
         self._load_cooldowns()
 
     def _load_cooldowns(self):
@@ -132,7 +144,9 @@ class AutomaticFreePool:
     def _scope(self, settings, provider_id):
         policy = POLICY_BY_ID[provider_id]
         identity = (
-            str(getattr(settings, PROVIDER_CATALOG[provider_id].base_url_attr, ""))
+            self._connected.get(provider_id, "disconnected")
+            if policy.mode == "subscription"
+            else str(getattr(settings, PROVIDER_CATALOG[provider_id].base_url_attr, ""))
             if policy.mode == "local"
             else provider_key(settings, provider_id)
         )
@@ -148,8 +162,11 @@ class AutomaticFreePool:
                 if p.mode == "free_account"
                 else True,
             )
-            for p in FREE_PROVIDERS
+            for p in ROUTING_PROVIDERS
         ]
+        values.append(
+            (settings.allow_subscription_models, settings.allow_paid_api_models)
+        )
         return hashlib.sha256(repr(values).encode()).hexdigest()
 
     async def _fetch(self, client, url, *, key="", body=None, native_gemini=False):
@@ -175,6 +192,11 @@ class AutomaticFreePool:
                 return bytes(raw)
 
     async def refresh(self, settings, *, force=False):
+        self._connected = (
+            await self._subscriptions.identities()
+            if settings.allow_subscription_models and self._subscriptions is not None
+            else {}
+        )
         fingerprint = self._config_fingerprint(settings)
         async with self._lock:
             if (
@@ -211,10 +233,78 @@ class AutomaticFreePool:
                         if policy.mode == "free_account"
                         else False,
                     }
+                    if policy.mode == "subscription":
+                        report["state"] = (
+                            "DISABLED"
+                            if not settings.allow_subscription_models
+                            else "CONNECT_ACCOUNT"
+                        )
+                        if (
+                            policy.provider_id not in self._connected
+                            or self._subscriptions is None
+                        ):
+                            return [], report
+                        try:
+                            async with semaphore, asyncio.timeout(25):
+                                infos = await self._subscriptions.discover(
+                                    policy.provider_id
+                                )
+                            report["catalog_models"] = len(infos)
+                            report["below_context_minimum"] = sum(
+                                i.context_window_tokens is not None
+                                and i.context_window_tokens < MIN_CONTEXT_TOKENS
+                                for i in infos
+                            )
+                            models = []
+                            for info in infos:
+                                secondary = (
+                                    metadata.get(policy.metadata_id, {})
+                                    .get("models", {})
+                                    .get(info.model_id, {})
+                                )
+                                tools = (
+                                    info.supports_tools
+                                    if info.supports_tools is not None
+                                    else secondary.get("tool_call") is True
+                                )
+                                context = info.context_window_tokens
+                                if (
+                                    tools
+                                    and context is not None
+                                    and context >= MIN_CONTEXT_TOKENS
+                                ):
+                                    models.append(
+                                        FreeModel(
+                                            policy.provider_id,
+                                            info.model_id,
+                                            context,
+                                            info.max_output_tokens,
+                                            True,
+                                            bool(
+                                                info.input_modalities
+                                                and "image" in info.input_modalities
+                                            ),
+                                            "subscription",
+                                        )
+                                    )
+                            report.update(
+                                models=len(models),
+                                state="ELIGIBLE" if models else "NO_ELIGIBLE_MODELS",
+                                coverage="COMPLETE",
+                            )
+                            return models, report
+                        except Exception:
+                            report["state"] = "DISCOVERY_UNAVAILABLE"
+                            return [], report
+                    if policy.mode == "paid_api" and not settings.allow_paid_api_models:
+                        report["state"] = "DISABLED"
+                        return [], report
                     if policy.mode != "local" and not key:
                         return [], report
-                    if policy.mode == "free_account" and not approvals.confirmed(
-                        settings, policy.provider_id
+                    if (
+                        policy.mode == "free_account"
+                        and not approvals.confirmed(settings, policy.provider_id)
+                        and not settings.allow_paid_api_models
                     ):
                         report["state"] = "CONFIRM_FREE_ACCOUNT"
                         return [], report
@@ -251,7 +341,9 @@ class AutomaticFreePool:
                             report["state"] = "DISCOVERY_UNAVAILABLE"
                         return [], report
 
-                results = await asyncio.gather(*(discover(p) for p in FREE_PROVIDERS))
+                results = await asyncio.gather(
+                    *(discover(p) for p in ROUTING_PROVIDERS)
+                )
             self._catalog = tuple(model for models, _ in results for model in models)
             self._reports = [report for _, report in results]
             self._refreshed = time()
@@ -263,6 +355,29 @@ class AutomaticFreePool:
             return await self._discover_local(client, settings, provider)
         key = provider_key(settings, provider)
         base = PROVIDER_CATALOG[provider].default_base_url.rstrip("/")
+        if provider == "open_router" and settings.allow_paid_api_models:
+            try:
+                credits = json.loads(
+                    await self._fetch(client, base + "/credits", key=key)
+                ).get("data", {})
+                total, used = credits.get("total_credits"), credits.get("total_usage")
+                paid_scope = self._scope(settings, provider) + ":paid_api"
+                if isinstance(total, int | float) and isinstance(used, int | float):
+                    if total <= used:
+                        self._cooldowns[paid_scope] = {
+                            "until": time() + 300,
+                            "reason": "balance_exhausted",
+                            "provider": provider,
+                        }
+                        self._save_cooldowns()
+                    elif (
+                        self._cooldowns.get(paid_scope, {}).get("reason")
+                        == "balance_exhausted"
+                    ):
+                        self._cooldowns.pop(paid_scope, None)
+                        self._save_cooldowns()
+            except httpx.HTTPError, ValueError, TypeError, AttributeError, TimeoutError:
+                pass
         if provider == "open_router":
             # A read-only key check can expose account-wide exhaustion before a
             # model-specific access error masks it. Keep the account body in RAM.
@@ -383,9 +498,29 @@ class AutomaticFreePool:
                 "auto",
             }:
                 continue
-            if policy.mode == "zero_price" and not explicitly_zero_priced(row):
+            basis = policy.mode
+            if (
+                provider == "open_router"
+                and settings.allow_paid_api_models
+                and not model_id.endswith(":free")
+            ):
+                basis = "paid_api"
+            if (
+                (policy.mode == "zero_price" and not explicitly_zero_priced(row))
+                or (policy.mode == "zen_free" and model_id not in zen_free)
+                or (
+                    policy.mode == "free_account"
+                    and not FreeAccountConfirmations().confirmed(settings, provider)
+                )
+            ):
+                basis = "paid_api"
+            if basis == "paid_api" and not settings.allow_paid_api_models:
                 continue
-            if policy.mode == "zen_free" and model_id not in zen_free:
+            # Command Code separates Anthropic and Chat models. This adapter
+            # currently supports its documented Chat endpoint only.
+            if provider == "commandcode" and "/chat/completions" not in row.get(
+                "supported_endpoints", []
+            ):
                 continue
             if provider == "gemini" and "generateContent" not in row.get(
                 "supportedGenerationMethods", []
@@ -394,6 +529,12 @@ class AutomaticFreePool:
             info = reference.get(
                 model_id, reference.get(model_id.removeprefix("models/"), {})
             )
+            if not info and provider in {"commandcode", "cline_pass"}:
+                # Exact upstream names only. Primary gateway context still wins;
+                # registry metadata never establishes account pricing.
+                info = (
+                    metadata.get("openrouter", {}).get("models", {}).get(model_id, {})
+                )
             params = row.get("supported_parameters", [])
             caps = row.get("capabilities", {})
             context = (
@@ -444,7 +585,7 @@ class AutomaticFreePool:
                     output,
                     tools,
                     "image" in modalities,
-                    policy.mode,
+                    basis,
                 )
             )
         return list({m.ref: m for m in models}.values()), complete
@@ -516,27 +657,57 @@ class AutomaticFreePool:
 
     def cooldown(self, settings, model):
         scope = self._scope(settings, model.provider_id)
-        for key in (scope, scope + ":" + model.model_id):
+        paid_scope = scope + ":" + model.billing
+        for key in (
+            scope,
+            scope + ":" + model.model_id,
+            paid_scope,
+            paid_scope + ":" + model.model_id,
+        ):
             entry = self._cooldowns.get(key)
             if entry and entry["until"] > time():
+                if (
+                    model.billing != "free"
+                    and entry.get("reason") == "daily_quota_exhausted"
+                ):
+                    continue
                 return entry
         return None
 
     async def select(self, settings, payload):
         await self.refresh(settings)
         context, tools, vision = request_needs(payload)
+        disabled = set((settings.routing_disabled_providers or "").split(","))
         eligible = [
             m
             for m in self._catalog
             if not self.cooldown(settings, m)
+            and m.provider_id not in disabled
+            and (m.billing != "subscription" or settings.allow_subscription_models)
+            and (m.billing != "paid_api" or settings.allow_paid_api_models)
+            and (payload.get("_fcc_wire_api") != "chat" or m.billing != "subscription")
             and (not tools or m.tools)
             and (not vision or m.vision)
             and m.context is not None
             and m.context >= max(context, MIN_CONTEXT_TOKENS)
         ]
-        groups = []
-        for policy in FREE_PROVIDERS:
-            models = [m for m in eligible if m.provider_id == policy.provider_id]
+        groups_by_billing = {kind: [] for kind in settings.routing_priority.split(",")}
+        provider_order = (settings.routing_provider_priority or "").split(",")
+        provider_order = [p for p in provider_order if p] + [
+            p.provider_id
+            for p in ROUTING_PROVIDERS
+            if p.provider_id not in provider_order
+        ]
+        for billing, provider_id in (
+            (billing, provider_id)
+            for billing in settings.routing_priority.split(",")
+            for provider_id in provider_order
+        ):
+            models = [
+                m
+                for m in eligible
+                if m.provider_id == provider_id and m.billing == billing
+            ]
             models.sort(
                 key=lambda m: (
                     m.ref != self._last_success,
@@ -556,16 +727,26 @@ class AutomaticFreePool:
                 )
             )
             if models:
-                groups.append(models)
-        # Try independent providers before spending the request budget on siblings.
-        ordered = [m for row in zip_longest(*groups) for m in row if m is not None]
-        if self._last_success:
-            ordered.sort(key=lambda m: m.ref != self._last_success)
+                groups_by_billing[billing].append(models)
+        # Honor category priority; rotate providers within a category. Reserve
+        # one slot per later category so a large catalog cannot starve fallback.
+        categories = [
+            [m for row in zip_longest(*groups) for m in row if m is not None]
+            for groups in groups_by_billing.values()
+            if groups
+        ]
+        ordered = []
+        for index, category in enumerate(categories):
+            budget = 12 - len(ordered) - (len(categories) - index - 1)
+            ordered.extend(category[:budget])
+        # Last success breaks ties inside a provider. It must not override the
+        # user's billing-category or provider priority on the next request.
         if not ordered:
             active = [
                 entry
                 for model in self._catalog
-                if (entry := self.cooldown(settings, model))
+                if model.provider_id not in disabled
+                and (entry := self.cooldown(settings, model))
             ]
             reset = min((v["until"] for v in active), default=None)
             detail = (
@@ -573,26 +754,135 @@ class AutomaticFreePool:
                 if reset
                 else ""
             )
+            rate_limited_only = bool(active) and all(
+                entry["reason"] in {"rate_limit", "daily_quota_exhausted"}
+                for entry in active
+            )
             raise ExecutionFailure(
-                FailureKind.RATE_LIMIT if active else FailureKind.UNAVAILABLE,
-                429 if active else 503,
-                "No eligible free provider with at least 512,000 context tokens is currently available for this request."
+                FailureKind.RATE_LIMIT
+                if rate_limited_only
+                else FailureKind.UNAVAILABLE,
+                429 if rate_limited_only else 503,
+                "No eligible "
+                + (
+                    "enabled"
+                    if settings.allow_paid_api_models
+                    or settings.allow_subscription_models
+                    else "free"
+                )
+                + " provider with at least 512,000 context tokens is currently available for this request."
                 + detail
-                + " Open Admin > Automatic free routing for credentials, account confirmations, capabilities and cooldowns. No paid fallback was enabled.",
+                + self.availability_summary(settings)
+                + " Open Admin > Routing controls for credentials, priority, capabilities and cooldowns."
+                + (
+                    " No paid fallback was enabled."
+                    if not (
+                        settings.allow_paid_api_models
+                        or settings.allow_subscription_models
+                    )
+                    else " Only explicitly enabled billing categories were considered."
+                ),
                 False,
             )
         return tuple(ordered[:12])
 
-    def record_failure(self, settings, model, failure):
+    def availability_summary(self, settings):
+        """Bounded, credential-free reasons from the current discovery snapshot."""
+        details, missing = [], []
+        disabled = set((settings.routing_disabled_providers or "").split(","))
+        for report in self._reports:
+            provider = report["provider"]
+            if provider in disabled or report["state"] == "DISABLED":
+                continue
+            if report["state"] in {"MISSING_KEY", "CONNECT_ACCOUNT"}:
+                missing.append(provider)
+                continue
+            reasons = set()
+            for model in self._catalog:
+                if model.provider_id == provider and (
+                    entry := self.cooldown(settings, model)
+                ):
+                    reasons.add(
+                        {
+                            "daily_quota_exhausted": "free daily quota exhausted",
+                            "balance_exhausted": "paid balance unavailable",
+                            "temporary_model_failure": "temporary model outage",
+                            "temporary_failure": "temporary provider outage",
+                            "rate_limit": "rate limited",
+                            "authentication_or_access": "authentication rejected",
+                            "model_or_request_incompatible": "model/request incompatible",
+                        }.get(entry["reason"], "cooling down")
+                    )
+            if reasons:
+                details.append(provider + ": " + ", ".join(sorted(reasons)))
+            elif report.get("below_context_minimum"):
+                details.append(provider + ": default context below 512,000")
+            elif report["state"] == "CONFIRM_FREE_ACCOUNT":
+                details.append(provider + ": free-account confirmation missing")
+            elif report["state"].startswith("DISCOVERY_"):
+                details.append(provider + ": catalog unavailable")
+            elif report["state"] == "NO_ELIGIBLE_MODELS":
+                details.append(provider + ": no eligible tool/context model")
+        if missing:
+            details.append(
+                "Missing credentials: "
+                + ", ".join(missing[:6])
+                + (" and others" if len(missing) > 6 else "")
+            )
+        return (" Route status: " + "; ".join(details[:8]) + ".") if details else ""
+
+    def record_attempt(self, model, *, request_id=None):
+        self._last_attempt = {
+            "provider": model.provider_id,
+            "model": model.model_id,
+            "billing": model.billing,
+            "context_tokens": model.context,
+            "request_id": request_id,
+            "started_at": datetime.now(UTC).isoformat(),
+            "state": "attempting",
+        }
+
+    def _finish_attempt(self, model, state, *, request_id=None, status_code=None):
+        details = {
+            "provider": model.provider_id,
+            "model": model.model_id,
+            "billing": model.billing,
+            "context_tokens": model.context,
+            "request_id": request_id,
+            "finished_at": datetime.now(UTC).isoformat(),
+            "state": state,
+            "status_code": status_code,
+        }
+        if self._last_attempt is None or (
+            self._last_attempt["request_id"] == request_id
+            and self._last_attempt["provider"] == model.provider_id
+            and self._last_attempt["model"] == model.model_id
+        ):
+            self._last_attempt = {**(self._last_attempt or {}), **details}
+        return details
+
+    def record_failure(self, settings, model, failure, *, request_id=None):
+        self._finish_attempt(
+            model, "failed", request_id=request_id, status_code=failure.status_code
+        )
         scope = self._scope(settings, model.provider_id)
+        if model.billing != "free":
+            scope += ":" + model.billing
         status = failure.status_code
         seconds = 60 if status == 429 else 45
         reason = "rate_limit" if status == 429 else "temporary_failure"
         if status in {401, 402}:
-            seconds, reason = 3600, "authentication_or_access"
+            seconds, reason = (
+                3600,
+                "balance_exhausted" if status == 402 else "authentication_or_access",
+            )
         elif status in {400, 403, 404, 413}:
             scope += ":" + model.model_id
             seconds, reason = 300, "model_or_request_incompatible"
+        elif status >= 500:
+            # A single model/backend outage does not prove every sibling is down.
+            scope += ":" + model.model_id
+            reason = "temporary_model_failure"
         if "daily free-model request quota exhausted" in failure.message:
             seconds, reason = 300, "daily_quota_exhausted"
             match = re.search(
@@ -615,8 +905,11 @@ class AutomaticFreePool:
         }
         self._save_cooldowns()
 
-    def record_success(self, model):
+    def record_success(self, model, *, request_id=None):
         self._last_success = model.ref
+        self._last_success_details = self._finish_attempt(
+            model, "succeeded", request_id=request_id
+        )
 
     async def status(self, settings, *, force=False):
         await self.refresh(settings, force=force)
@@ -625,12 +918,22 @@ class AutomaticFreePool:
             row = dict(report)
             models = [m for m in self._catalog if m.provider_id == row["provider"]]
             row["available_models"] = sum(
-                not self.cooldown(settings, m) for m in models
+                not self.cooldown(settings, m)
+                and m.provider_id
+                not in (settings.routing_disabled_providers or "").split(",")
+                for m in models
             )
-            provider_cooldown = self._cooldowns.get(
-                self._scope(settings, row["provider"])
+            cooldowns = [
+                entry for model in models if (entry := self.cooldown(settings, model))
+            ]
+            provider_cooldown = min(
+                cooldowns, key=lambda entry: entry["until"], default=None
             )
-            if provider_cooldown and provider_cooldown["until"] > time():
+            if (
+                provider_cooldown
+                and provider_cooldown["until"] > time()
+                and row["available_models"] == 0
+            ):
                 row.update(
                     state="COOLDOWN",
                     retry_at=datetime.fromtimestamp(
@@ -638,6 +941,13 @@ class AutomaticFreePool:
                     ).isoformat(),
                     reason=provider_cooldown["reason"],
                 )
+                row["cooldown_reasons"] = sorted(
+                    {entry["reason"] for entry in cooldowns}
+                )
+            if row["provider"] in (settings.routing_disabled_providers or "").split(
+                ","
+            ):
+                row["state"] = "EXCLUDED"
             row["model_ids"] = [m.model_id for m in models]
             row["model_details"] = [
                 {
@@ -646,18 +956,34 @@ class AutomaticFreePool:
                     "max_output_tokens": m.output_limit,
                     "vision": m.vision,
                     "price_basis": m.price_basis,
+                    "billing": m.billing,
                 }
                 for m in models
             ]
             rows.append(row)
         return {
             "automatic": settings.auto_free_models,
+            "allow_subscriptions": settings.allow_subscription_models,
+            "allow_paid_api": settings.allow_paid_api_models,
+            "billing_priority": settings.routing_priority.split(","),
+            "provider_priority": [
+                p for p in (settings.routing_provider_priority or "").split(",") if p
+            ],
+            "disabled_providers": [
+                p for p in (settings.routing_disabled_providers or "").split(",") if p
+            ],
+            "billing_counts": {
+                kind: sum(m.billing == kind for m in self._catalog)
+                for kind in ("free", "subscription", "paid_api")
+            },
             "minimum_context_tokens": MIN_CONTEXT_TOKENS,
             "refreshed_at": datetime.fromtimestamp(self._refreshed, UTC).isoformat(),
             "catalog_ttl_seconds": CATALOG_TTL,
             "eligible_models": len(self._catalog),
             "available_models": sum(r["available_models"] for r in rows),
             "last_success": self._last_success,
+            "last_success_details": self._last_success_details,
+            "latest_attempt": self._last_attempt,
             "providers": rows,
-            "note": "Eligible means pricing/account and catalog checks passed; it is not a successful inference guarantee. Account-dependent tiers rely on your acknowledgment that paid billing is disabled.",
+            "note": "Eligible means catalog and enabled billing-policy checks passed; it is not a successful inference guarantee. Free-account tiers rely on your acknowledgment. Paid APIs and subscriptions may consume allowance or purchased credits. This gateway has no monetary budget cap; configure spending controls with each provider. Every route retains the 512,000-token minimum.",
         }

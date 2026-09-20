@@ -132,6 +132,26 @@ class ProviderDescriptor:
 
 
 PROVIDER_CATALOG: dict[str, ProviderDescriptor] = {
+    "commandcode": ProviderDescriptor(
+        provider_id="commandcode",
+        display_name="Command Code",
+        website_url="https://commandcode.ai/",
+        logo_filename="commandcode.svg",
+        credential_env="COMMANDCODE_API_KEY",
+        credential_url="https://commandcode.ai/studio",
+        credential_attr="commandcode_api_key",
+        default_base_url="https://api.commandcode.ai/provider/v1",
+    ),
+    "kimchi": ProviderDescriptor(
+        provider_id="kimchi",
+        display_name="Kimchi",
+        website_url="https://kimchi.dev/",
+        logo_filename="kimchi.svg",
+        credential_env="KIMCHI_API_KEY",
+        credential_url="https://app.kimchi.dev/settings",
+        credential_attr="kimchi_api_key",
+        default_base_url="https://llm.kimchi.dev/openai/v1",
+    ),
     "nvidia_nim": ProviderDescriptor(
         provider_id="nvidia_nim",
         display_name="NVIDIA NIM",
@@ -167,7 +187,7 @@ PROVIDER_CATALOG: dict[str, ProviderDescriptor] = {
     ),
     "cline_pass": ProviderDescriptor(
         provider_id="cline_pass",
-        display_name="ClinePass",
+        display_name="Cline API / ClinePass",
         website_url="https://cline.bot/",
         logo_filename="cline.svg",
         credential_env="CLINE_API_KEY",
