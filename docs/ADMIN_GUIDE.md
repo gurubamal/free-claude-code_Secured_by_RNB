@@ -16,7 +16,7 @@ Max uses each adapter's supported controls; Inception maps it to `high`. Provide
 
 **Providers** contains account connections and API-key configuration. Use **Configure** to enter a provider's settings or **Edit** to update saved settings. Enter credentials only in the protected local Admin page.
 
-The screenshot's **378 models available** is the OpenRouter provider catalog count. Automatic free routing applies additional pricing/account, tool-support, context and quota checks. Every selected model and fallback must have at least **512,000 context tokens** and enough room for the request; a catalog count does not establish any of those checks.
+The screenshot's **378 models available** is the OpenRouter provider catalog count. Automatic free routing applies additional pricing/account, tool-support, context and quota checks. Every selected model and fallback must have more than **512,000 context tokens** and enough room for the request; a catalog count does not establish any of those checks.
 
 **OpenAI / ChatGPT** uses the connected-account flow. Enable **Allow connected subscriptions** in Routing controls to permit eligible subscription models. Connecting alone does not enable billing or add free capacity. A catalog with 272k default context is excluded by the 512k rule even when an experimental larger maximum is advertised.
 

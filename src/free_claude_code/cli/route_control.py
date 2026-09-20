@@ -36,7 +36,9 @@ def print_status(data):
         )
     else:
         print("Automatic selection")
-    print("Automatic fallback: always enabled. Minimum context: 512,000 tokens.")
+    print(
+        "Automatic fallback: always enabled. Required context: more than 512,000 tokens."
+    )
     print(
         "Billing order: " + " > ".join(map(display, data.get("billing_priority", [])))
     )

@@ -20,7 +20,7 @@ This connection uses your project's API quotas and billing. It does not import a
 5. Return to Admin. **Connected** means OAuth credentials were saved. A successful catalog load is a separate check; neither alone proves inference capacity.
 6. In **Routing controls**, enable **Allow paid API routes**, include this provider in your priority order and refresh catalogs. This switch gates Google OAuth even if your project currently has free quota: the gateway cannot establish free billing from a login. Set spending limits with Google.
 
-Automatic routing requires reported catalog input capacity of **512,000 tokens or more**, known tool support and enough room for the request. Missing metadata and smaller models remain excluded. The existing free-first/paid-later order, cooldowns and fallback rules apply. Messages, streaming Responses and Chat Completions can use this connection.
+Automatic routing requires reported catalog input capacity of **more than 512,000 tokens**, known tool support and enough room for the request. Missing metadata and smaller models remain excluded. The existing free-first/paid-later order, cooldowns and fallback rules apply. Messages, streaming Responses and Chat Completions can use this connection.
 
 ## Storage and troubleshooting
 

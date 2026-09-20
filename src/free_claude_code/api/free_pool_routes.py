@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 
+from free_claude_code.config.free_mode import MIN_CONTEXT_TOKENS
 from free_claude_code.core.free_accounts import FreeAccountConfirmations
 
 from .admin_security import require_loopback_admin
@@ -59,7 +60,7 @@ async def apply_route_selection(body: RouteSelectionPayload, request: Request):
             and (body.model is None or m.model_id == body.model)
             and m.tools
             and m.context is not None
-            and m.context >= 512000
+            and m.context >= MIN_CONTEXT_TOKENS
             for m in pool._catalog
         ):
             raise HTTPException(

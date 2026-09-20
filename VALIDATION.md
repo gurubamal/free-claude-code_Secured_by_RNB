@@ -2,6 +2,31 @@
 
 Release: `6.2.46+rnb.1`, Windows, Python 3.14.0.
 
+## Any eligible fallback with context strictly above 512k — 2026-09-21
+
+The preferred model families remain preferences, not an allowlist. Other catalog
+models can be used when preferred models are missing, incompatible or unavailable.
+The operator's clarified context requirement is now **strictly greater than
+512,000 tokens**: the shared minimum accepted integer is 512,001. Discovery,
+automatic request selection, CLI/web manual selection and the advertised automatic
+model catalog use the same constant. The existing 512,000-token Claude compaction
+window remains a conservative client setting.
+
+**314 scoped tests passed in 21.45 seconds**, including 17 new cases for
+nonpreferred fallback across supported free/paid/subscription ingress combinations,
+unknown/exact-boundary rejection and manual selection at the boundary:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q -n 4 security_tests tests/application/test_model_catalog.py tests/contracts/test_startup_import_boundaries.py tests/config/test_admin_status.py tests/contracts/test_admin_provider_manifest.py --tb=short --show-capture=no
+```
+
+The two catalog tests for nonautomatic inventory now explicitly select that mode,
+instead of inheriting this fork's automatic default. All **12 installed-Chrome
+smoke checks** passed with synthetic provider data; screenshots reflect the updated
+context wording. Ruff and diff checks passed. This update sent no live inference
+requests and does not establish additional free account capacity. Historical
+validation sections retain the context policy in effect when they ran.
+
 ## Gateway fallback and inference health — 2026-09-21 IST
 
 Account-wide API-plan denials now skip the affected provider scope. Automatic

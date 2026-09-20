@@ -126,6 +126,67 @@ def app_with_storage():
     return app, store, settings
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "wire,provider,billing",
+    [
+        ("messages", "open_router", "zero_price"),
+        ("responses", "open_router", "zero_price"),
+        ("chat", "open_router", "zero_price"),
+        ("messages", "deepseek", "paid_api"),
+        ("responses", "deepseek", "paid_api"),
+        ("chat", "deepseek", "paid_api"),
+        ("messages", "openai", "subscription"),
+        ("responses", "openai", "subscription"),
+    ],
+)
+@pytest.mark.parametrize("preferred_context", [None, 512000])
+async def test_unpreferred_model_falls_back_only_above_512k(
+    wire, provider, billing, preferred_context
+):
+    pool = AutomaticFreePool()
+    pool.refresh = AsyncMock()
+    preferred = model(
+        provider, "deepseek-v4.1-flash", billing, context=preferred_context
+    )
+    available = model(provider, "another-catalog-model", billing, context=512001)
+    pool._catalog = (preferred, available)
+    settings = Settings(
+        allow_paid_api_models=True,
+        allow_subscription_models=True,
+        routing_selected_provider=provider,
+        routing_selected_model=preferred.model_id,
+        routing_selected_billing=preferred.billing,
+    )
+    assert await pool.select(settings, {"_fcc_wire_api": wire}) == (available,)
+
+
+def test_manual_selection_rejects_exactly_512k_and_accepts_above_it():
+    app, store, settings = app_with_storage()
+    app.state.free_pool._catalog = (
+        model("open_router", "boundary:free", context=512000),
+        model("open_router", "above:free", context=512001),
+    )
+    headers = {
+        "Authorization": "Bearer " + settings.proxy_auth_token,
+        "X-FCC-Route-Control": "1",
+    }
+    with TestClient(
+        app, base_url="http://127.0.0.1", client=("127.0.0.1", 4321)
+    ) as client:
+        body = {"mode": "selected", "provider": "open_router", "model": "boundary:free"}
+        assert (
+            client.post("/v1/routing/selection", json=body, headers=headers).status_code
+            == 400
+        )
+        body["model"] = "above:free"
+        assert (
+            client.post("/v1/routing/selection", json=body, headers=headers).status_code
+            == 200
+        )
+    assert store.read(env={}).settings.routing_selected_model == "above:free"
+
+
 def test_cli_api_authorization_persistence_restore_auto_and_credential_preservation():
     app, store, settings = app_with_storage()
     token = settings.proxy_auth_token

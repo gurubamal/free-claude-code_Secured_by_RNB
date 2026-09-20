@@ -12,6 +12,7 @@ from free_claude_code.config.settings import Settings
 
 def test_catalog_sorts_components_and_preserves_exact_identity_and_default():
     settings = Settings.model_construct(
+        auto_free_models=False,
         model="open_router/Zulu",
         model_fable=None,
         model_opus=None,
@@ -59,6 +60,7 @@ def test_catalog_sorts_components_and_preserves_exact_identity_and_default():
 
 def test_catalog_retains_configured_models_and_enriches_each_reference_once():
     settings = Settings.model_construct(
+        auto_free_models=False,
         model="open_router/shared",
         model_opus="open_router/shared",
         model_fable=None,

@@ -33,6 +33,11 @@ The proxy and provider-adapter foundation comes from upstream. The RNB additions
 
 For the free provider list, setup and health colors, see the **[Free provider guide](docs/FREE_PROVIDER_GUIDE.md)**. Green requires a completed inference with output within 15 minutes; catalog presence alone stays unverified. Failed routes are skipped during cooldown, and expired successes turn amber. The live guide is under **Routing controls → Verified free failovers**.
 
+Preferred model names are not an allowlist. If they are unavailable or unsuitable,
+automatic routing can use any other eligible catalog model in the enabled billing
+categories. Every primary and fallback must have **more than 512,000 context
+tokens**; exactly 512,000 and unknown limits are excluded.
+
 ## Maximum reasoning
 
 In **Admin → Reasoning**, set the root policy to **Max**, with Fable, Opus, Sonnet and Haiku set to **Max** or **Inherit**. The root setting controls automatic routing and overrides lower or disabled effort sent by a client. Chat Completions uses the same provider reasoning encoders as the other interfaces, including after provider fallback. The Claude launcher passes a fixed root effort through `CLAUDE_CODE_EFFORT_LEVEL`; restart the CLI to update its session display. The gateway applies a saved change to subsequent requests.
@@ -74,7 +79,7 @@ Add your provider API keys in **Admin → Providers**, save them, then open **Ro
 
 Both paid switches start **off**. To permit paid fallback, enable **Allow connected subscriptions** and/or **Allow paid API routes**, choose the billing order, arrange providers with Up/Down, and save. Uncheck providers to exclude them. The default order is free → subscriptions → paid APIs. Paid routes can consume allowance, purchased credits or incur charges; configure provider spending limits because this gateway has no monetary budget cap.
 
-Every selected model and fallback must have **at least 512,000 context tokens**, known tool support and enough estimated room for the request. The status page distinguishes missing credentials, catalog failures, eligible models and cooldowns. **OpenAI / ChatGPT** and **GitHub Copilot** can enter subscription routing after opt-in, subject to those checks. A connected account with a 272k default context remains excluded even if its catalog lists a larger experimental maximum. See [FREE_ROUTING.md](FREE_ROUTING.md) for provider and interface limits.
+Every selected model and fallback must have **more than 512,000 context tokens**, known tool support and enough estimated room for the request. The status page distinguishes missing credentials, catalog failures, eligible models and cooldowns. **OpenAI / ChatGPT** and **GitHub Copilot** can enter subscription routing after opt-in, subject to those checks. A connected account with a 272k default context remains excluded even if its catalog lists a larger experimental maximum. See [FREE_ROUTING.md](FREE_ROUTING.md) for provider and interface limits.
 
 The **Actual gateway route** panel shows the last successful provider/model and latest attempt, billing category, context and timestamps. It refreshes every ten seconds while visible; records reset on server restart. These are gateway records across clients. A CLI header or a model's self-description may repeat the fixed client alias and does not establish the actual route.
 

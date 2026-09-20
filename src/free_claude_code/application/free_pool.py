@@ -15,6 +15,7 @@ from urllib.parse import urlencode, urljoin, urlsplit
 import httpx
 
 from free_claude_code.application.route_health import VERIFIED_TTL_SECONDS, RouteHealth
+from free_claude_code.config.free_mode import MIN_CONTEXT_TOKENS
 from free_claude_code.config.free_model_preferences import (
     FREE_MODEL_FAMILIES,
     free_model_family,
@@ -44,7 +45,6 @@ from free_claude_code.core.private_storage import (
 )
 
 CATALOG_TTL = 300
-MIN_CONTEXT_TOKENS = 512000
 MAX_CATALOG_BYTES = 16 * 1024 * 1024
 
 
@@ -889,7 +889,7 @@ class AutomaticFreePool:
                     or settings.allow_subscription_models
                     else "free"
                 )
-                + " provider with at least 512,000 context tokens is currently available for this request."
+                + " provider with more than 512,000 context tokens is currently available for this request."
                 + detail
                 + self.availability_summary(settings)
                 + " Open Admin > Routing controls for credentials, priority, capabilities and cooldowns."
@@ -936,7 +936,7 @@ class AutomaticFreePool:
             if reasons:
                 details.append(provider + ": " + ", ".join(sorted(reasons)))
             elif report.get("below_context_minimum"):
-                details.append(provider + ": default context below 512,000")
+                details.append(provider + ": default context at or below 512,000")
             elif report["state"] == "CONFIRM_FREE_ACCOUNT":
                 details.append(provider + ": free-account confirmation missing")
             elif report["state"].startswith("DISCOVERY_"):
@@ -1189,5 +1189,5 @@ class AutomaticFreePool:
             "last_success_details": self._last_success_details,
             "latest_attempt": self._last_attempt,
             "providers": rows,
-            "note": "Eligible means catalog and enabled billing-policy checks passed; it is not a successful inference guarantee. Free-account tiers rely on your acknowledgment. Paid APIs and subscriptions may consume allowance or purchased credits. This gateway has no monetary budget cap; configure spending controls with each provider. Every route retains the 512,000-token minimum.",
+            "note": "Eligible means catalog and enabled billing-policy checks passed; it is not a successful inference guarantee. Free-account tiers rely on your acknowledgment. Paid APIs and subscriptions may consume allowance or purchased credits. This gateway has no monetary budget cap; configure spending controls with each provider. Every route requires more than 512,000 context tokens.",
         }

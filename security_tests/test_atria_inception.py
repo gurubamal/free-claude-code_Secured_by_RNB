@@ -149,7 +149,7 @@ async def test_paid_opt_in_and_context_floor_preserved(monkeypatch, provider_id)
     # A future primary-catalog entry can qualify without weakening the floor.
     row = {
         "id": "synthetic-future-chat",
-        "context_length": 512000,
+        "context_length": 512001,
         "max_output_length": 8192,
         "supported_features": ["tools"],
     }

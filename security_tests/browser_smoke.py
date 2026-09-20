@@ -391,7 +391,7 @@ def main():
                             "available_free_routes": [],
                         }
                     ],
-                    "minimum_context_tokens": 512000,
+                    "minimum_context_tokens": 512001,
                     "refreshed_at": "2026-09-20T08:00:00+00:00",
                     "eligible_models": 2,
                     "health_ttl_seconds": 900,
@@ -401,7 +401,7 @@ def main():
                         "provider": "gemini",
                         "model": "synthetic-512k",
                         "billing": "free",
-                        "context_tokens": 512000,
+                        "context_tokens": 512001,
                         "state": "succeeded",
                         "finished_at": "2026-09-20T08:00:00+00:00",
                     },
@@ -451,7 +451,7 @@ def main():
                             "model_details": [
                                 {
                                     "id": "synthetic-512k",
-                                    "context_tokens": 512000,
+                                    "context_tokens": 512001,
                                     "billing": "free",
                                     "available": True,
                                     "health": {"state": "UNTESTED"},

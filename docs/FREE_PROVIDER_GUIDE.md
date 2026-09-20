@@ -4,6 +4,11 @@ The server's live guide is **Admin → Routing controls → Verified free failov
 at `/admin/free`. This document explains how to use it; it is not a permanent
 list of working accounts or a promise of free capacity.
 
+Preferred names are optional: any other available catalog model can be a fallback
+if its billing category is enabled, its capabilities fit the request and its
+context is **strictly above 512,000 tokens**. Exactly 512,000 is excluded. A missing
+preferred model never causes the server to wait when another eligible route exists.
+
 ## Start with free routes
 
 1. Save your own keys in the protected Admin provider forms.
@@ -13,7 +18,7 @@ list of working accounts or a promise of free capacity.
    you authorize for fallback.
 4. Choose **Return to automatic selection**, or run
    `Run-Hardened.ps1 route auto`, if a saved manual choice should no longer go first.
-5. Refresh catalogs. Every route still needs known tool support, at least
+5. Refresh catalogs. Every route still needs known tool support, more than
    **512,000 context tokens**, and enough room for the actual request.
 6. Use the gateway normally. Completed inference records update the guide.
    Refreshing catalogs does not send a generation test or consume inference quota.

@@ -93,7 +93,8 @@ async def test_discovery_filters_paid_and_unknown_models_then_enforces_512k(
     )
     catalogs = [
         row("large"),
-        row("exact", 512000),
+        row("exact", 512001),
+        row("boundary-excluded", 512000),
         row("small", 511999),
         row("unknown", None),
         row("paid", pricing={"prompt": 0, "completion": 1}),
@@ -112,7 +113,7 @@ async def test_discovery_filters_paid_and_unknown_models_then_enforces_512k(
 
     monkeypatch.setattr(pool, "_fetch", fetch)
     status = await pool.status(settings)
-    assert status["minimum_context_tokens"] == 512000
+    assert status["minimum_context_tokens"] == 512001
     assert status["eligible_models"] == 2
     assert {m.model_id for m in pool._catalog} == {"large", "exact"}
     assert (
@@ -182,7 +183,7 @@ async def test_context_vision_request_fit_and_provider_diversity():
         settings, {"messages": [{"role": "user", "content": "hi"}]}
     )
     assert len(selected) == 12 and selected[1].provider_id == "gemini"
-    assert all(m.context >= 512000 for m in selected)
+    assert all(m.context > 512000 for m in selected)
     selected = await pool.select(
         settings,
         {
@@ -671,7 +672,7 @@ async def test_mistral_primary_limits_override_secondary_capabilities(monkeypatc
                 "data": [
                     {
                         "id": "primary-large",
-                        "max_context_length": 512000,
+                        "max_context_length": 512001,
                         "max_output_tokens": 4096,
                         "capabilities": {"function_calling": True},
                     },
@@ -696,6 +697,6 @@ async def test_mistral_primary_limits_override_secondary_capabilities(monkeypatc
     )
     assert (
         len(models) == 1
-        and models[0].context == 512000
+        and models[0].context == 512001
         and models[0].output_limit == 4096
     )

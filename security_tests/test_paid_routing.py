@@ -164,7 +164,7 @@ async def test_outage_is_not_misreported_as_rate_limit(monkeypatch):
         await pool.select(settings, {})
     assert error.value.status_code == 503
     assert "deepseek: temporary model outage" in error.value.message
-    assert "openai: default context below 512,000" in error.value.message
+    assert "openai: default context at or below 512,000" in error.value.message
 
 
 def model(provider, name, billing="paid_api", context=1048576):
@@ -197,7 +197,7 @@ async def test_opt_in_priority_disable_and_context_floor(monkeypatch):
         "openai",
         "open_router",
     ]
-    assert all(m.context >= 512000 for m in chosen)
+    assert all(m.context > 512000 for m in chosen)
     pool.record_success(chosen[-1])
     assert (await pool.select(settings, {}))[0].provider_id == "commandcode"
     disabled = settings.model_copy(update={"routing_disabled_providers": "commandcode"})
@@ -268,7 +268,7 @@ async def test_connected_catalog_cannot_promote_small_or_unknown_context(monkeyp
                 ),
                 ProviderModelInfo("unknown", supports_tools=True),
                 ProviderModelInfo(
-                    "large", context_window_tokens=512000, supports_tools=True
+                    "large", context_window_tokens=512001, supports_tools=True
                 ),
             )
         ),

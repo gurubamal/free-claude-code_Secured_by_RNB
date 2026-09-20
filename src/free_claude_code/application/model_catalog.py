@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from free_claude_code.config.free_mode import MIN_CONTEXT_TOKENS
 from free_claude_code.config.model_refs import (
     configured_chat_model_refs,
     split_provider_model_ref,
@@ -55,9 +56,9 @@ def read_model_catalog(
         model = CatalogModel(
             wire_slug=ref,
             provider_model_ref=ref,
-            display_name="Automatic free models (512k+ context)",
+            display_name="Automatic models (above 512k context)",
             supports_reasoning=None,
-            context_window_tokens=512000,
+            context_window_tokens=MIN_CONTEXT_TOKENS,
             max_output_tokens=8192,
         )
         return ModelCatalog(models=(model,), default_model_id=ref)

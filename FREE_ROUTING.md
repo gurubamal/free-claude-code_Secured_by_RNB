@@ -1,6 +1,6 @@
 # Automatic routing: free first, optional paid fallback
 
-Policy updated 2026-09-20. The minimum is **512,000 context tokens** (decimal 512k) for every primary and fallback, including paid, subscription and local models. An experimental maximum does not replace the provider's active default limit. Context size is not a daily allowance, output allowance or evidence of coding quality.
+Policy updated 2026-09-21. Required context is **strictly above 512,000 tokens** (decimal 512k; minimum accepted integer 512,001) for every primary and fallback, including paid, subscription and local models. An experimental maximum does not replace the provider's active default limit. Context size is not a daily allowance, output allowance or evidence of coding quality.
 
 ## Reasoning policy
 
@@ -32,6 +32,10 @@ For a visual walkthrough of provider configuration, see the [Admin screenshot gu
 Acknowledgments bind to the key fingerprint; changing the key requires a new acknowledgment. Revoke it before enabling paid billing. An unconfirmed account-dependent key is considered only as paid access when that category is enabled. The app cannot independently prove these billing settings. Saving a key does not purchase credits, upgrade a plan or create an account. **There is no monetary budget cap in this gateway**; use each provider's spending controls. Subscription access can consume account allowance or purchased credits.
 
 ## Manual first preference with automatic fallback
+
+Model preferences do not restrict fallback to the four named families. Any other
+catalog model can be used when it passes billing, capability, request-fit and
+strictly-above-512k checks. Missing preferred models do not require a manual switch.
 
 Use **Choose provider and model** on `/admin/free`, or `Run-Hardened.ps1 route use PROVIDER [MODEL]`. Choose exact IDs from `route list` (free by default). Omitting MODEL chooses the best eligible model in that provider. `route status` shows the preference and last successful route; `route auto` restores the saved automatic order. The web console offers the same automatic-return button.
 
@@ -72,7 +76,7 @@ Providers outside these tables remain outside automatic routing. Catalog visibil
 | Cline API / ClinePass | Paid API; API key and documented `/models` + Chat endpoints; internal provider ID remains `cline_pass` | [Cline API](https://docs.cline.bot/api/overview) |
 | Command Code | Paid API; `https://api.commandcode.ai/provider/v1`; only catalog entries explicitly supporting `/chat/completions`. Anthropic-only entries are excluded. | [Provider API](https://commandcode.ai/blog/command-code-provider-api) |
 | Kimchi | Paid API; `https://llm.kimchi.dev/openai/v1`; missing context/tool metadata excludes models | [Quickstart](https://docs.kimchi.dev/docs/inference-quickstart) |
-| OpenAI / ChatGPT | Connected subscription; Messages/Responses only; primary default context must meet 512k | [Authentication](https://learn.chatgpt.com/docs/auth) |
+| OpenAI / ChatGPT | Connected subscription; Messages/Responses only; primary default context must exceed 512k | [Authentication](https://learn.chatgpt.com/docs/auth) |
 | GitHub Copilot | Connected subscription; Messages/Responses only; same tool/context checks | [Copilot documentation](https://docs.github.com/en/copilot) |
 
 These additional API-key integrations use the paid switch even when a plan includes credits; connecting these accounts does not establish free capacity. Cline's catalog may omit capabilities, requiring matching registry metadata. Cline and Command Code can use exact model-ID matches from the OpenRouter registry for missing capabilities and limits; primary gateway context takes precedence. These integrations do not install the providers' native coding harnesses.

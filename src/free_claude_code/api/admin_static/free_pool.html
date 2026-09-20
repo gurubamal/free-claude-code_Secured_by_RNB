@@ -6,7 +6,7 @@
 </style></head><body>
 <a href="/admin">← Back to Admin and provider keys</a>
 <h1>Routing controls</h1>
-<p>Choose allowed billing categories and fallback priority. Every route requires known tool support, at least 512,000 context tokens and room for your request. Failed providers cool down; the next eligible provider takes over before output starts.</p>
+<p>Choose allowed billing categories and fallback priority. Every route requires known tool support, more than 512,000 context tokens and room for your request. Failed providers cool down; the next eligible provider takes over before output starts.</p>
 <section class="card" aria-labelledby="activityTitle" style="margin:20px 0">
 <h2 id="activityTitle">Actual gateway route</h2>
 <h3>Last successful route</h3><p id="lastRoute">No successful request recorded since server restart.</p>
@@ -28,7 +28,7 @@
 <section class="card" id="routingPolicy" aria-labelledby="policyTitle">
 <h2 id="policyTitle">Paid access and priority</h2>
 <label style="max-width:none"><input type="checkbox" id="allowSubscriptions">Allow connected subscriptions (ChatGPT / GitHub Copilot)</label>
-<p>Uses the connected account's allowance or purchased credits. A successful login does not guarantee a 512k+ model.</p>
+<p>Uses the connected account's allowance or purchased credits. A successful login does not guarantee a model above 512k.</p>
 <label style="max-width:none"><input type="checkbox" id="allowPaidApi">Allow paid API routes</label>
 <p>Requests can incur provider charges. Set spending limits with each provider; this gateway has no monetary budget cap. These switches do not purchase credits or bypass account limits.</p>
 <label>Billing order <select id="billingOrder">
@@ -58,7 +58,7 @@
 <p id="note"></p><footer>Catalog checks do not guarantee availability or model quality. Each service controls its own quotas and data policy. Credentials are entered in Providers and stored using the installation’s protected storage. Refreshing this page does not reset a provider’s quota.</footer>
 <script>
 const el=id=>document.getElementById(id);
-const labels={MISSING_KEY:'Add API key',CONFIRM_FREE_ACCOUNT:'Confirm free account',ELIGIBLE:'Eligible',COOLDOWN:'Cooling down',NO_ELIGIBLE_MODELS:'No eligible 512k+ models',DISCOVERY_REJECTED:'Catalog access rejected',DISCOVERY_UNAVAILABLE:'Catalog unavailable',DISABLED:'Billing category disabled',CONNECT_ACCOUNT:'Connect account',EXCLUDED:'Excluded by your preference'};
+const labels={MISSING_KEY:'Add API key',CONFIRM_FREE_ACCOUNT:'Confirm free account',ELIGIBLE:'Eligible',COOLDOWN:'Cooling down',NO_ELIGIBLE_MODELS:'No eligible models above 512k',DISCOVERY_REJECTED:'Catalog access rejected',DISCOVERY_UNAVAILABLE:'Catalog unavailable',DISABLED:'Billing category disabled',CONNECT_ACCOUNT:'Connect account',EXCLUDED:'Excluded by your preference'};
 function node(tag,text){const n=document.createElement(tag);n.textContent=text;return n}
 const healthLabels={VERIFIED:'Verified recently',FAILED:'Failed / blocked',UNTESTED:'Not inference-tested',STALE:'Check expired',RECHECK_DUE:'Recheck due'};
 function healthBadge(health={state:'UNTESTED'}){const s=health.state||'UNTESTED',n=node('span',healthLabels[s]||s);n.className='health health-'+(s==='VERIFIED'?'green':s==='FAILED'?'red':'amber');return n}
@@ -98,7 +98,7 @@ function render(data){
   if(p.http_status)state.append(node('small','HTTP '+p.http_status));
   if(p.message)state.append(node('small',p.message));
   if(p.coverage==='PARTIAL')state.append(node('small','Partial catalog coverage'));
-  if(p.below_context_minimum)state.append(node('small',p.below_context_minimum+' catalog models have default context below 512,000. Experimental maxima are not used.'));
+  if(p.below_context_minimum)state.append(node('small',p.below_context_minimum+' catalog models have default context at or below 512,000. Experimental maxima are not used.'));
   if((p.model_ids||[]).length){
    const d=node('details','');d.append(node('summary','Show models'));
    for(const m of p.model_details||p.model_ids.map(id=>({id}))){
@@ -117,7 +117,7 @@ function render(data){
    setup.append(label,node('small','Without this acknowledgment, the key is considered only when paid APIs are enabled. Account billing is not independently verified.'));
   }else if(p.mode==='subscription')setup.append(node('small','Connect this account in Providers and enable subscriptions above. Supports Messages and Responses; Chat Completions uses API-key routes.'));
   else if(p.mode==='paid_api')setup.append(node('small','Save an API key in Providers and enable paid APIs above. Account charges or credits may apply.'));
-  else setup.append(node('small',p.mode==='local'?'Load a local tool-capable model with at least 512,000 context tokens.':p.state==='MISSING_KEY'?'Add your key in Providers. Models are selected automatically.':'Models are separated by free or paid eligibility and your saved routing policy.'));
+  else setup.append(node('small',p.mode==='local'?'Load a local tool-capable model with more than 512,000 context tokens.':p.state==='MISSING_KEY'?'Add your key in Providers. Models are selected automatically.':'Models are separated by free or paid eligibility and your saved routing policy.'));
   const a=node('a','Provider documentation');a.href=p.source;a.target='_blank';a.rel='noopener noreferrer';setup.append(document.createElement('br'),a);
   tr.append(name,state,models,setup);el('rows').append(tr);
  }
