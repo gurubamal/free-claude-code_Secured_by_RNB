@@ -1191,11 +1191,15 @@ class _OpenAIChatStreamRunner:
                 provider_failure_override=self._transport._behavior.failure_override,
             )
 
-        retryable = (
-            attempt_failure.retryable
-            if attempt_failure is not None
-            else is_retryable_stream_error(error)
-        )
+        if attempt_failure is not None:
+            retryable = attempt_failure.retryable
+        elif (
+            override := self._transport._behavior.failure_override(error)
+        ) is not None:
+            # An accepted stream still obeys provider-specific terminal limits.
+            retryable = override.retryable
+        else:
+            retryable = is_retryable_stream_error(error)
         generated_output = assembler.generated_output
         complete_tool_salvageable = assembler.complete_tool_salvageable
         decision = recovery.advance_failure(

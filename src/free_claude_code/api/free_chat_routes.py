@@ -9,6 +9,7 @@ from starlette.responses import JSONResponse, StreamingResponse
 
 from free_claude_code.config.free_mode import free_request_body
 from free_claude_code.config.settings import Settings
+from free_claude_code.core.free_quota import MAX_QUOTA_BODY_BYTES, daily_free_quota
 
 from .dependencies import get_settings, require_proxy_auth
 
@@ -67,6 +68,7 @@ async def free_chat(
         trust_env=False, follow_redirects=False, timeout=httpx.Timeout(180, connect=10)
     )
     response = None
+    quota = None
     try:
         # Retry only before any bytes are delivered; never replay emitted tool calls.
         for attempt in range(3):
@@ -79,6 +81,19 @@ async def free_chat(
                 ),
                 stream=True,
             )
+            if response.status_code == 429:
+                error_body = bytearray()
+                async for chunk in response.aiter_bytes():
+                    error_body.extend(
+                        chunk[: MAX_QUOTA_BODY_BYTES + 1 - len(error_body)]
+                    )
+                    if len(error_body) > MAX_QUOTA_BODY_BYTES:
+                        break
+                quota = daily_free_quota(
+                    bytes(error_body), status_code=429, headers=response.headers
+                )
+                if quota is not None:
+                    break
             if response.status_code not in {429, 502, 503, 504} or attempt == 2:
                 break
             await response.aclose()
@@ -91,6 +106,18 @@ async def free_chat(
             )
             await response.aclose()
             await client.aclose()
+            if quota is not None:
+                return JSONResponse(
+                    {
+                        "error": {
+                            "message": quota.message(),
+                            "type": "rate_limit_error",
+                            "code": "free_daily_quota_exhausted",
+                        }
+                    },
+                    429,
+                    headers=quota.response_headers(),
+                )
             return JSONResponse(
                 {
                     "error": {

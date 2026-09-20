@@ -7,6 +7,7 @@ from free_claude_code.config.constants import ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKEN
 from free_claude_code.config.free_mode import FREE_MODEL, free_request_body
 from free_claude_code.core.anthropic import ReasoningReplayMode
 from free_claude_code.core.diagnostics import extract_upstream_error_detail
+from free_claude_code.core.free_quota import daily_free_quota_from_error
 from free_claude_code.core.reasoning import ReasoningEffort
 from free_claude_code.providers.admission import ProviderAdmissionController
 from free_claude_code.providers.base import ProviderConfig
@@ -34,6 +35,10 @@ _REQUEST_POLICY = OpenAIChatRequestPolicy(
 
 class OpenRouterChatBehavior(OpenAIChatBehavior):
     """OpenRouter Chat adaptation without HTTP ownership."""
+
+    def failure_override(self, error):
+        quota = daily_free_quota_from_error(error)
+        return quota.failure() if quota is not None else None
 
     def prepare_create_body(self, body):
         if body.get("model") == FREE_MODEL:

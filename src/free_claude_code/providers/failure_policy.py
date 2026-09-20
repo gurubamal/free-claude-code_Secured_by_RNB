@@ -19,6 +19,7 @@ from free_claude_code.core.diagnostics import (
     safe_exception_message,
 )
 from free_claude_code.core.failures import ExecutionFailure, FailureKind
+from free_claude_code.core.free_quota import daily_free_quota_from_error
 
 ProviderFailureOverride = Callable[[Exception], ExecutionFailure | None]
 
@@ -75,6 +76,11 @@ def classify_provider_failure(
 ) -> ExecutionFailure:
     """Return one detailed canonical failure after provider retries are exhausted."""
     exc = underlying_provider_error(exc)
+    if provider_name == "OPENROUTER":
+        quota = daily_free_quota_from_error(exc)
+        if quota is not None:
+            # The safe actionable message replaces repetitive upstream retry history.
+            return quota.failure(request_id)
     if isinstance(exc, ExecutionFailure):
         failure = exc
         message = failure.message

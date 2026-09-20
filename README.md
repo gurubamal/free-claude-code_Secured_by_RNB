@@ -21,7 +21,7 @@ The proxy and provider-adapter foundation comes from upstream. The RNB additions
 
 ## Verified scope
 
-On **2026-09-20**, the Windows build passed **844 tests**, browser login/reset/restart checks, and a live Claude scratch-file coding test. The dependency audit reported no known findings in 108 checked third-party package entries; the local fork itself was not covered by that advisory lookup. See [VALIDATION.md](VALIDATION.md) for commands, versions and exclusions.
+On **2026-09-20**, the Windows build passed **1,103 scoped tests** after the daily-quota fix. Earlier checks that day covered browser login/reset/restart and a live Claude scratch-file coding task. The dependency audit reported no known findings in 108 checked third-party package entries; the local fork itself was not covered by that advisory lookup. See [VALIDATION.md](VALIDATION.md) for commands, versions and exclusions.
 
 These are bounded checks. They do not establish zero vulnerabilities, indefinite task completion or compatibility with every coding harness.
 
@@ -85,6 +85,20 @@ Authenticated interfaces: `/v1/messages`, `/v1/responses`, `/v1/chat/completions
 Automatic routing ignores client-specified paid model names while free mode is active. Free requests carry zero provider price ceilings, exclude caller-paid routing/plugin extras, and cap output at 8,192 tokens. OpenRouter selects an available free model with the required features; this is not a benchmarked best-model selector.
 
 Free providers can exhaust quotas or go offline. Claude is configured for earlier automatic context compaction. Keep native session persistence enabled and resume saved sessions after an outage. Other harnesses need their own compaction/checkpoint handling. Neither model switching nor a proxy can make every context window or free quota unlimited.
+
+### OpenRouter daily quota (HTTP 429)
+
+`free-models-per-day` means the OpenRouter account's daily free-request allowance is exhausted. It is different from a full context window or an expired Claude login. The allowance is shared across OpenRouter free models; choosing another one does not restore it. A coding task can require many model requests, including follow-up turns after tool calls.
+
+The gateway recognizes this daily limit, stops its immediate retries and displays the provider-reported reset time in UTC. It also stops retry/recovery when this limit arrives after an Anthropic-compatible stream has started. Generic temporary rate limits still receive bounded retries. Requests are not queued for automatic restart, and a separate client can have its own retry policy.
+
+Wait for the reset, then resume your saved Claude session from the same project:
+
+```powershell
+.\Claude-Free.ps1 --resume
+```
+
+Daily allowances depend on OpenRouter's current account policy; see [OpenRouter limits](https://openrouter.ai/docs/api/reference/limits). Purchasing credits can raise the free-model request ceiling, but it is a paid account action and is never performed by this app. No paid model fallback is enabled. Hosted free-only routing does not guarantee uninterrupted long tasks.
 
 ## Verification and updates
 
