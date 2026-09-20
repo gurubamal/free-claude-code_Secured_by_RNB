@@ -7,6 +7,7 @@ from email.utils import parsedate_to_datetime
 
 from .failures import ExecutionFailure, FailureKind
 from .free_quota import daily_free_quota
+from .provider_access import plan_access_failure
 
 
 def retry_seconds(headers):
@@ -32,6 +33,7 @@ class FreeStreamCheck:
         self.provider = provider
         self.buffer = b""
         self.complete = False
+        self.has_output = False
 
     def feed(self, chunk):
         self.buffer += chunk.encode() if isinstance(chunk, str) else chunk
@@ -56,6 +58,9 @@ class FreeStreamCheck:
             }:
                 self.complete = True
             if event.get("error") or event.get("type") in {"error", "response.failed"}:
+                access = plan_access_failure(self.provider, event, 200)
+                if access:
+                    raise access
                 quota = (
                     daily_free_quota(event, status_code=200)
                     if self.provider == "open_router"
@@ -69,6 +74,7 @@ class FreeStreamCheck:
                     f"Free provider {self.provider} returned a stream error.",
                     False,
                 )
+            self.has_output = self.has_output or _has_output(event)
         if len(self.buffer) > 2 * 1024 * 1024:
             raise ExecutionFailure(
                 FailureKind.UPSTREAM,
@@ -76,3 +82,46 @@ class FreeStreamCheck:
                 "Provider SSE event exceeded the size limit.",
                 False,
             )
+
+
+def _has_output(event):
+    """A role/header/heartbeat is not delivered text, thinking or a tool call."""
+    kind = event.get("type", "")
+    if not isinstance(kind, str):
+        kind = ""
+    if kind == "content_block_start":
+        block = event.get("content_block") or {}
+        return isinstance(block, dict) and bool(
+            block.get("text")
+            or block.get("thinking")
+            or block.get("type") in {"tool_use", "server_tool_use", "redacted_thinking"}
+        )
+    if kind == "content_block_delta":
+        delta = event.get("delta") or {}
+        return isinstance(delta, dict) and any(
+            delta.get(k) for k in ("text", "thinking", "partial_json", "signature")
+        )
+    if kind.startswith("response.") and kind.endswith(".delta"):
+        return bool(event.get("delta"))
+    if kind in {"response.output_item.added", "response.output_item.done"}:
+        item = event.get("item") or {}
+        return isinstance(item, dict) and (
+            item.get("type") not in {None, "message", "reasoning"}
+            or bool(item.get("content"))
+        )
+    for choice in event.get("choices") or []:
+        if not isinstance(choice, dict):
+            continue
+        delta = choice.get("delta") or {}
+        if isinstance(delta, dict) and any(
+            delta.get(k)
+            for k in (
+                "content",
+                "reasoning",
+                "reasoning_content",
+                "tool_calls",
+                "function_call",
+            )
+        ):
+            return True
+    return False

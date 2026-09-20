@@ -394,6 +394,8 @@ def main():
                     "minimum_context_tokens": 512000,
                     "refreshed_at": "2026-09-20T08:00:00+00:00",
                     "eligible_models": 2,
+                    "health_ttl_seconds": 900,
+                    "verified_free_routes": [],
                     "available_models": 1,
                     "last_success_details": {
                         "provider": "gemini",
@@ -418,6 +420,7 @@ def main():
                             "name": "OpenRouter",
                             "mode": "zero_price",
                             "state": "COOLDOWN",
+                            "health_state": "FAILED",
                             "models": 1,
                             "available_models": 0,
                             "model_ids": ["synthetic-1m"],
@@ -427,6 +430,11 @@ def main():
                                     "context_tokens": 1048576,
                                     "billing": "free",
                                     "available": False,
+                                    "health": {
+                                        "state": "FAILED",
+                                        "checked_at": "2026-09-20T08:00:00+00:00",
+                                        "status_code": 429,
+                                    },
                                 }
                             ],
                             "retry_at": "2026-09-21T00:00:00+00:00",
@@ -446,6 +454,7 @@ def main():
                                     "context_tokens": 512000,
                                     "billing": "free",
                                     "available": True,
+                                    "health": {"state": "UNTESTED"},
                                 }
                             ],
                             "account_confirmed": False,
@@ -503,7 +512,8 @@ def main():
                         assert route.request.headers["x-fcc-admin"] == "1"
                         confirmation_requests.append(True)
                         free_status["providers"][1].update(
-                            account_confirmed=True, state="ELIGIBLE"
+                            account_confirmed=True,
+                            state="ELIGIBLE",
                         )
                     route.fulfill(json=free_status)
 
@@ -514,6 +524,18 @@ def main():
                 ).wait_for()
                 page.locator("td").filter(has_text="Cooling down").wait_for()
                 assert page.locator("#eligible").inner_text() == "2"
+                assert (
+                    "No free route has a recent"
+                    in page.locator("#verifiedFreeList").inner_text()
+                )
+                assert (
+                    page.locator('tr[data-provider="open_router"] .health-red').count()
+                    == 2
+                )
+                assert (
+                    page.locator('tr[data-provider="gemini"] .health-amber').count()
+                    == 2
+                )
                 page.locator("#selectionProvider").select_option("open_router")
                 page.locator("#selectionModel").select_option("synthetic-1m")
                 page.get_by_role(
@@ -559,8 +581,56 @@ def main():
                     "This key belongs to a free account with paid billing disabled.",
                     exact=True,
                 ).check()
-                page.get_by_text("Eligible", exact=True).wait_for()
+                page.locator('tr[data-provider="gemini"] td').filter(
+                    has_text="Eligible"
+                ).wait_for()
                 assert confirmation_requests
+                # Synthetic inference receipt, separate from catalog/confirmation.
+                free_status["providers"][1]["health_state"] = "VERIFIED"
+                free_status["providers"][1]["model_details"][0]["health"] = {
+                    "state": "VERIFIED",
+                    "checked_at": "2026-09-20T08:02:00+00:00",
+                    "status_code": 200,
+                }
+                free_status["verified_free_routes"] = [
+                    {
+                        "provider": "gemini",
+                        "model": "synthetic-512k",
+                        "checked_at": "2026-09-20T08:02:00+00:00",
+                    }
+                ]
+                page.clock.fast_forward(10000)
+                page.locator("#verifiedFreeList .health-green").wait_for()
+                assert (
+                    page.locator('tr[data-provider="gemini"] .health-green').count()
+                    == 2
+                )
+                # A later server snapshot expires green; the UI refreshes health.
+                free_status["providers"][1]["health_state"] = "UNTESTED"
+                free_status["providers"][1]["model_details"][0]["health"]["state"] = (
+                    "STALE"
+                )
+                free_status["verified_free_routes"] = []
+                page.clock.fast_forward(10000)
+                page.locator("#verifiedFreeList").filter(
+                    has_text="No free route"
+                ).wait_for()
+                assert (
+                    page.locator('tr[data-provider="gemini"] .health-amber').count()
+                    == 2
+                )
+                # New completed inference restores the success shown in the screenshot.
+                free_status["providers"][1]["health_state"] = "VERIFIED"
+                free_status["providers"][1]["model_details"][0]["health"]["state"] = (
+                    "VERIFIED"
+                )
+                free_status["verified_free_routes"] = [
+                    {
+                        "provider": "gemini",
+                        "model": "synthetic-512k",
+                        "checked_at": "2026-09-20T08:02:00+00:00",
+                    }
+                ]
                 page.get_by_role("button", name="Refresh catalogs").click()
                 page.locator("#notice").filter(has_text="Catalog checked").wait_for()
                 page.locator("td details summary").first.click()
@@ -589,6 +659,9 @@ def main():
                 assert not failures, failures
                 checks.append(
                     "Chrome manual provider/model selection, automatic fallback status and automatic restore, route identity and timed refresh, 512k+ display, acknowledgments, paid switches, free-model preference availability and editing, provider reordering, exclusions and saving (synthetic API fixtures)"
+                )
+                checks.append(
+                    "Chrome green/red/amber inference health, empty verified-free guide and timed expiration/recovery (synthetic receipts)"
                 )
                 page.goto(url + "/admin")
                 page.locator("#providerGroups .provider-strip").first.wait_for(

@@ -15,8 +15,10 @@ from free_claude_code.config.free_providers import POLICY_BY_ID, provider_key
 from free_claude_code.config.provider_catalog import PROVIDER_CATALOG
 from free_claude_code.config.settings import Settings
 from free_claude_code.core.failures import ExecutionFailure, FailureKind
+from free_claude_code.core.fallback_order import prefer_next_provider
 from free_claude_code.core.free_quota import MAX_QUOTA_BODY_BYTES, daily_free_quota
 from free_claude_code.core.free_stream import FreeStreamCheck, retry_seconds
+from free_claude_code.core.provider_access import plan_access_failure
 
 from .dependencies import get_settings, require_proxy_auth
 
@@ -117,7 +119,7 @@ async def free_chat(
     payload = {k: v for k, v in payload.items() if k in _ALLOWED}
     pool = request.app.state.free_pool
     try:
-        models = await pool.select(settings, {**payload, "_fcc_wire_api": "chat"})
+        models = list(await pool.select(settings, {**payload, "_fcc_wire_api": "chat"}))
     except ExecutionFailure as failure:
         return failure_response(failure)
     stream = payload.get("stream") is True
@@ -138,15 +140,15 @@ async def free_chat(
     request_id = getattr(request.state, "request_id", None)
     handed_off = False
     try:
-        for model in models:
+        for index, model in enumerate(models):
             if pool.cooldown(settings, model):
                 continue
-            url, headers, body = chat_target(
-                settings, model, payload, prepare_body=prepare_body
-            )
-            body["stream"] = stream
             quota = None
             try:
+                url, headers, body = chat_target(
+                    settings, model, payload, prepare_body=prepare_body
+                )
+                body["stream"] = stream
                 pool.record_attempt(model, request_id=request_id)
                 if model.provider_id == "gemini_oauth":
                     # Reuse the credential owner; never expose OAuth tokens via Admin.
@@ -180,7 +182,9 @@ async def free_chat(
                         if response.status_code in {400, 401, 402, 403, 404, 413, 429}
                         else 502
                     )
-                    last = (
+                    last = plan_access_failure(
+                        model.provider_id, raw_error, response.status_code
+                    ) or (
                         quota.failure()
                         if quota
                         else ExecutionFailure(
@@ -197,6 +201,7 @@ async def free_chat(
                     )
                     pool.record_failure(settings, model, last, request_id=request_id)
                     await response.aclose()
+                    prefer_next_provider(models, index)
                     continue
                 if not stream:
                     data = bytearray()
@@ -208,7 +213,26 @@ async def free_chat(
                     result = json.loads(data)
                     if not isinstance(result, dict) or not result.get("choices"):
                         raise ValueError("Invalid chat result")
-                    pool.record_success(model, request_id=request_id)
+                    has_output = any(
+                        isinstance(ch, dict)
+                        and isinstance(ch.get("message"), dict)
+                        and any(
+                            ch["message"].get(k)
+                            for k in (
+                                "content",
+                                "tool_calls",
+                                "reasoning",
+                                "reasoning_content",
+                            )
+                        )
+                        for ch in result["choices"]
+                    )
+                    pool.record_success(
+                        model,
+                        request_id=request_id,
+                        settings=settings,
+                        has_output=has_output,
+                    )
                     return JSONResponse(
                         result,
                         headers={
@@ -231,9 +255,7 @@ async def free_chat(
                         first.extend(part)
                         if len(first) > 2 * 1024 * 1024:
                             raise ValueError("No bounded initial SSE event")
-                        if b"data:" in first and b"\n\n" in first.replace(
-                            b"\r\n", b"\n"
-                        ):
+                        if check.has_output or check.complete:
                             break
                     else:
                         raise ValueError("Empty provider stream")
@@ -257,7 +279,12 @@ async def free_chat(
                                 "Free provider stream ended without completion.",
                                 False,
                             )
-                        pool.record_success(selected, request_id=request_id)
+                        pool.record_success(
+                            selected,
+                            request_id=request_id,
+                            settings=settings,
+                            has_output=checker.has_output,
+                        )
                     except (httpx.HTTPError, ExecutionFailure) as error:
                         failure = (
                             error
@@ -324,6 +351,7 @@ async def free_chat(
                     )
                 )
                 pool.record_failure(settings, model, last, request_id=request_id)
+                prefer_next_provider(models, index)
         return failure_response(last, quota)
     except asyncio.CancelledError:
         if response is not None:

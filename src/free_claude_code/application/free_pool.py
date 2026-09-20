@@ -14,6 +14,7 @@ from urllib.parse import urlencode, urljoin, urlsplit
 
 import httpx
 
+from free_claude_code.application.route_health import VERIFIED_TTL_SECONDS, RouteHealth
 from free_claude_code.config.free_model_preferences import (
     FREE_MODEL_FAMILIES,
     free_model_family,
@@ -31,6 +32,7 @@ from free_claude_code.config.paths import config_dir_path
 from free_claude_code.config.provider_catalog import PROVIDER_CATALOG
 from free_claude_code.config.provider_model_defaults import DOCUMENTED_MODEL_DEFAULTS
 from free_claude_code.core.failures import ExecutionFailure, FailureKind
+from free_claude_code.core.fallback_order import reserve_provider_candidates
 from free_claude_code.core.free_accounts import (
     FreeAccountConfirmations,
     credential_fingerprint,
@@ -123,6 +125,7 @@ class AutomaticFreePool:
         self._last_success_details = None
         self._last_attempt = None
         self._load_cooldowns()
+        self._health = RouteHealth()
 
     def _load_cooldowns(self):
         try:
@@ -159,6 +162,29 @@ class AutomaticFreePool:
             else provider_key(settings, provider_id)
         )
         return provider_id + ":" + credential_fingerprint(identity)
+
+    def _health_key(self, settings, model):
+        return (
+            self._scope(settings, model.provider_id)
+            + ":"
+            + model.billing
+            + ":"
+            + model.model_id
+        )
+
+    def model_health(self, settings, model):
+        return self._health.status(
+            self._health_key(settings, model), cooldown=self.cooldown(settings, model)
+        )
+
+    def health_rank(self, settings, model):
+        return {
+            "VERIFIED": 0,
+            "UNTESTED": 1,
+            "STALE": 1,
+            "RECHECK_DUE": 2,
+            "FAILED": 3,
+        }[self.model_health(settings, model)["state"]]
 
     def _config_fingerprint(self, settings):
         approvals = FreeAccountConfirmations()
@@ -779,6 +805,7 @@ class AutomaticFreePool:
             ]
             models.sort(
                 key=lambda m: (
+                    self.health_rank(settings, m),
                     free_preference_rank(m.model_id, preferences)
                     if billing == "free"
                     else 0,
@@ -806,9 +833,10 @@ class AutomaticFreePool:
             sorted(
                 [m for row in zip_longest(*groups) for m in row if m is not None],
                 key=lambda m: (
+                    self.health_rank(settings, m),
                     free_preference_rank(m.model_id, preferences)
                     if billing == "free"
-                    else 0
+                    else 0,
                 ),
             )
             for billing, groups in groups_by_billing.items()
@@ -820,22 +848,18 @@ class AutomaticFreePool:
                 for category in categories
                 for m in category
                 if self.matches_selection(settings, m)
-            ]
+            ][:1]
             categories = ([selected] if selected else []) + [
                 remaining
                 for category in categories
-                if (
-                    remaining := [
-                        m for m in category if not self.matches_selection(settings, m)
-                    ]
-                )
+                if (remaining := [m for m in category if m not in selected])
             ]
         ordered = []
         for index, category in enumerate(categories):
             budget = 12 - len(ordered) - (len(categories) - index - 1)
-            ordered.extend(category[:budget])
-        # Last success cannot displace a preferred free family on the next request.
-        # Stable sorting preserves provider rotation within each preference tier.
+            ordered.extend(reserve_provider_candidates(category, budget))
+        # Recent verified health precedes family preference. Stable sorting keeps
+        # provider rotation within each health and preference tier.
         if not ordered:
             active = [
                 entry
@@ -905,6 +929,7 @@ class AutomaticFreePool:
                             "temporary_failure": "temporary provider outage",
                             "rate_limit": "rate limited",
                             "authentication_or_access": "authentication rejected",
+                            "api_access_not_in_plan": "current plan does not include API access",
                             "model_or_request_incompatible": "model/request incompatible",
                         }.get(entry["reason"], "cooling down")
                     )
@@ -965,13 +990,20 @@ class AutomaticFreePool:
         if not affects_availability:
             # Local request conversion says nothing about upstream availability.
             return
+        self._health.record(
+            self._health_key(settings, model),
+            success=False,
+            status_code=failure.status_code,
+        )
         scope = self._scope(settings, model.provider_id)
         if model.billing != "free":
             scope += ":" + model.billing
         status = failure.status_code
         seconds = 60 if status == 429 else 45
         reason = "rate_limit" if status == 429 else "temporary_failure"
-        if status in {401, 402}:
+        if status == 403 and failure.provider_access_blocked:
+            seconds, reason = 3600, "api_access_not_in_plan"
+        elif status in {401, 402}:
             seconds, reason = (
                 3600,
                 "balance_exhausted" if status == 402 else "authentication_or_access",
@@ -1005,11 +1037,16 @@ class AutomaticFreePool:
         }
         self._save_cooldowns()
 
-    def record_success(self, model, *, request_id=None):
+    def record_success(self, model, *, request_id=None, settings=None, has_output=True):
         self._last_success = model.ref
         self._last_success_details = self._finish_attempt(
             model, "succeeded", request_id=request_id
         )
+        settings = settings or self._settings
+        if settings is not None and has_output:
+            self._health.record(
+                self._health_key(settings, model), success=True, status_code=200
+            )
 
     async def status(self, settings, *, force=False):
         await self.refresh(settings, force=force)
@@ -1068,9 +1105,25 @@ class AutomaticFreePool:
                         and (m.billing != "paid_api" or settings.allow_paid_api_models)
                     ),
                     "cooldown_reason": (self.cooldown(settings, m) or {}).get("reason"),
+                    "health": self.model_health(settings, m),
                 }
                 for m in models
             ]
+            row["verified_models"] = sum(
+                m["available"] and m["health"]["state"] == "VERIFIED"
+                for m in row["model_details"]
+            )
+            row["failed_models"] = sum(
+                m["health"]["state"] == "FAILED" for m in row["model_details"]
+            )
+            row["health_state"] = (
+                "VERIFIED"
+                if row["verified_models"]
+                else "FAILED"
+                if row["state"]
+                in {"COOLDOWN", "DISCOVERY_REJECTED", "DISCOVERY_UNAVAILABLE"}
+                else "UNTESTED"
+            )
             rows.append(row)
         return {
             "automatic": settings.auto_free_models,
@@ -1115,6 +1168,19 @@ class AutomaticFreePool:
             },
             "minimum_context_tokens": MIN_CONTEXT_TOKENS,
             "reasoning_policy": settings.reasoning_policy.value,
+            "health_ttl_seconds": VERIFIED_TTL_SECONDS,
+            "verified_free_routes": [
+                {
+                    "provider": row["provider"],
+                    "model": model["id"],
+                    "checked_at": model["health"]["checked_at"],
+                }
+                for row in rows
+                for model in row["model_details"]
+                if model["billing"] == "free"
+                and model["available"]
+                and model["health"]["state"] == "VERIFIED"
+            ],
             "refreshed_at": datetime.fromtimestamp(self._refreshed, UTC).isoformat(),
             "catalog_ttl_seconds": CATALOG_TTL,
             "eligible_models": len(self._catalog),

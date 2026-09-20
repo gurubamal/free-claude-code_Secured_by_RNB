@@ -21,6 +21,7 @@ This repository builds on an existing MIT-licensed project; the upstream source 
 | Password reset | Invalidates browser sessions while preserving provider configuration |
 | Automatic routing | Free by default; opt-in subscriptions and paid APIs, configurable category/provider order, persistent cooldowns and a strict 512k+ floor |
 | Route visibility | Actual provider/model, billing category, latest attempt and last completed success in the web controls |
+| Inference health | Green/red/amber model badges, timestamped verified-free guide, private receipts that survive restart, and recently working routes preferred within each billing category |
 | Reasoning controls | One root effort policy for Messages, Responses and Chat Completions, preserved through fallback; Max maps through each provider's adapter, and the Claude launcher inherits fixed effort |
 | Google account login | Gemini API browser OAuth with PKCE, private token storage, automatic refresh and disconnect; requires your own Google Cloud project and Desktop OAuth client |
 | Additional provider cards | Atria and Inception API-key configuration, live model discovery and Chat adapters; their current 256k/260k models remain below the required 512k routing minimum |
@@ -29,6 +30,8 @@ This repository builds on an existing MIT-licensed project; the upstream source 
 | Dependencies | Locked installation, pinned build tools and security minimums for packages flagged by the dated audit |
 
 The proxy and provider-adapter foundation comes from upstream. The RNB additions and policy changes are documented in [HARDENING.md](HARDENING.md). The `Secured_by_RNB` suffix identifies this fork; it is not a security certification or a promise of unlimited free usage.
+
+For the free provider list, setup and health colors, see the **[Free provider guide](docs/FREE_PROVIDER_GUIDE.md)**. Green requires a completed inference with output within 15 minutes; catalog presence alone stays unverified. Failed routes are skipped during cooldown, and expired successes turn amber. The live guide is under **Routing controls → Verified free failovers**.
 
 ## Maximum reasoning
 
@@ -136,7 +139,7 @@ Enter a new password twice at hidden prompts. Reset invalidates browser sessions
 
 Authenticated interfaces: `/v1/messages`, `/v1/responses`, `/v1/chat/completions`. Connect compatible clients with the local proxy credential. A Codex launcher is supplied as `Run-Hardened.ps1 codex`; it was not live-client validated for this release.
 
-Automatic routing ignores client-specified models and manual fallback lists while `AUTO_FREE_MODELS=true`. It follows the saved billing order, then rotates providers in priority order before sibling models within that category. For free routes, the default preference is **DeepSeek V4.1 Flash → Kimi K3 → Qwen 3.8 Max → GLM 5.3 Flash**, across providers, then other eligible free models. Edit this order in Routing controls. Every new request returns to the highest available preference after cooldown; a successful fallback does not replace it. Preferences never establish free pricing or bypass the 512k/tool checks. Last success only breaks ties within the same preference and provider. Each request considers at most 12 candidates, reserving at least one slot for each later eligible category. This is a bounded policy, not a benchmarked best-model selector. Responses requires streaming. Connected subscriptions support Messages/Responses; Chat Completions uses API-key/local routes.
+Automatic routing ignores client-specified models and manual fallback lists while `AUTO_FREE_MODELS=true`. A saved manual choice is first when eligible; remaining routes follow your billing order. Within each category, recently verified models come before untested/stale models and previously failed models due for recheck. Within each health tier, the free preference is **DeepSeek V4.1 Flash → Kimi K3 → Qwen 3.8 Max → GLM 5.3 Flash**, across providers, then other eligible free models. Edit this order in Routing controls. Preferences never establish free pricing or bypass the 512k/tool checks. Each request considers at most 12 candidates, reserving room for other providers and later eligible categories. After failure, another provider in the category being considered is preferred before siblings. This is a bounded availability policy, not a benchmarked best-model selector. Responses requires streaming. Connected subscriptions support Messages/Responses; Chat Completions uses API-key/local routes.
 
 The stable client model ID remains `open_router/openrouter/free` for compatibility; paid opt-ins can route this alias to paid models. Inference targets an explicit discovered model. Opaque upstream routers are excluded because they could choose a smaller context. Caller routing/plugin extras are removed. OpenRouter **free** routes retain zero price ceilings even when paid routes are enabled. Output is capped at 8,192 tokens or the model's smaller limit; context size is not an output allowance.
 

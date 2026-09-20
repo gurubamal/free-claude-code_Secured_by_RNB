@@ -27,6 +27,7 @@ class ExecutionFailure(Exception):
     message: str
     retryable: bool
     retry_after_seconds: float | None = None
+    provider_access_blocked: bool = False
 
     def __post_init__(self) -> None:
         Exception.__init__(self, self.message)

@@ -21,6 +21,7 @@ from free_claude_code.core.diagnostics import (
 from free_claude_code.core.failures import ExecutionFailure, FailureKind
 from free_claude_code.core.free_quota import daily_free_quota_from_error
 from free_claude_code.core.free_stream import retry_seconds
+from free_claude_code.core.provider_access import plan_access_failure
 
 ProviderFailureOverride = Callable[[Exception], ExecutionFailure | None]
 
@@ -89,6 +90,18 @@ def classify_provider_failure(
         if request_id_line and request_id_line not in message:
             message = f"{message}\n\n{request_id_line}"
         return replace(failure, message=message)
+
+    access_failure = plan_access_failure(
+        provider_name,
+        getattr(exc, "body", None) or attached_upstream_error_body(exc),
+        _reported_status(exc),
+    )
+    if access_failure is not None:
+        return replace(
+            access_failure,
+            message=access_failure.message
+            + (f"\n\nRequest ID: {request_id}" if request_id else ""),
+        )
 
     failure = (
         provider_failure_override(exc)

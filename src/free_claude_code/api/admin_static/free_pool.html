@@ -2,6 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Routing controls · FCC Hardened</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,sans-serif;background:#101722;color:#e8eef7}body{max-width:1200px;margin:40px auto;padding:0 24px}a{color:#88c5ff}h1{font-size:30px;margin-bottom:8px}p{line-height:1.55;color:#b9c7d9}.summary{display:flex;gap:24px;flex-wrap:wrap;margin:28px 0}.card{background:#192536;border:1px solid #31435b;border-radius:12px;padding:18px;min-width:150px}.card strong{display:block;font-size:30px;margin-bottom:6px}button{background:#265895;color:white;border:0;border-radius:7px;padding:10px 16px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}table{width:100%;border-collapse:collapse}th,td{text-align:left;vertical-align:top;padding:14px 10px;border-bottom:1px solid #304056}th{color:#9eb4ce}td small{display:block;color:#b9c7d9;margin-top:7px;max-width:410px}details{max-width:400px;overflow-wrap:anywhere}summary{cursor:pointer}#notice{min-height:25px}label{display:block;max-width:320px;line-height:1.4}input{margin-right:8px}.scroll{overflow:auto}footer{padding:22px 0;color:#b9c7d9}
+.health{display:inline-block;border-radius:5px;padding:3px 7px;font-size:12px;font-weight:650;margin:6px 0}.health-green{background:#153e2c;color:#9debc1}.health-red{background:#502631;color:#ffbdc8}.health-amber{background:#473d20;color:#f3d889}.model-health{padding:8px 0;border-top:1px solid #304056}.model-health small{font-size:12px}#verifiedFreeList li{margin:10px 0}
 </style></head><body>
 <a href="/admin">← Back to Admin and provider keys</a>
 <h1>Routing controls</h1>
@@ -39,11 +40,17 @@
 <option value="paid_api,subscription,free">Paid APIs → subscriptions → free</option>
 </select></label>
 <label style="max-width:none">Preferred free model order <input id="freeModelOrder" type="text" style="width:95%" aria-describedby="freePreferenceHelp"></label>
-<p id="freePreferenceHelp">Use these family IDs in your preferred order: deepseek-v4.1-flash, kimi-k3, qwen3.8-max, glm-5.3-flash. Free routes try available preferred families first across providers, then other eligible free models. An empty list uses provider order. This does not make a paid model free. Every new request returns to the highest available preference after cooldown.</p>
+<p id="freePreferenceHelp">Use these family IDs in your preferred order: deepseek-v4.1-flash, kimi-k3, qwen3.8-max, glm-5.3-flash. Recently verified routes come first within each billing category; family preferences apply within each health tier. An empty list uses provider order. This does not make a paid model free. After cooldown, previously failed routes can be rechecked after other eligible choices.</p>
 <ul id="freePreferenceStatus" aria-label="Preferred free model availability"></ul>
-<p>Move providers up or down to choose priority within each billing category and free-model preference tier. Uncheck a provider to exclude it. Each request considers up to 12 candidates, reserving a slot for every eligible billing category.</p>
+<p>Move providers up or down to choose priority within each health and free-model preference tier. Uncheck a provider to exclude it. Each request considers up to 12 candidates, reserving room for other providers and eligible billing categories.</p>
 <details style="max-width:none;margin:18px 0"><summary>Provider fallback order and exclusions</summary><ol id="providerOrder" aria-label="Provider fallback priority"></ol></details>
 <button id="savePolicy" type="button">Save routing preferences</button><p id="policyNotice" role="status"></p>
+</section>
+<section class="card" aria-labelledby="verifiedTitle" style="margin:20px 0">
+<h2 id="verifiedTitle">Verified free failovers</h2>
+<p id="healthGuide">Green requires a completed inference with output in the last 15 minutes. Red routes are skipped during cooldown; amber means untested, stale or due for a recheck. These records survive restart and expire automatically. Catalog refresh does not test inference or reset quotas.</p>
+<p>For free-first routing, choose Free → subscriptions → paid APIs and Return to automatic selection. A saved manual choice takes precedence. Billing permissions, tool support and the 512k minimum still apply.</p>
+<ul id="verifiedFreeList" aria-label="Recently verified free routes"></ul>
 </section>
 <div class="summary"><div class="card"><strong id="eligible">—</strong>Eligible models</div><div class="card"><strong id="available">—</strong>Outside cooldown</div><div class="card"><strong id="providers">—</strong>Providers with eligible models</div></div>
 <button id="refresh" type="button">Refresh catalogs</button><p id="notice" role="status">Loading provider status…</p>
@@ -53,6 +60,13 @@
 const el=id=>document.getElementById(id);
 const labels={MISSING_KEY:'Add API key',CONFIRM_FREE_ACCOUNT:'Confirm free account',ELIGIBLE:'Eligible',COOLDOWN:'Cooling down',NO_ELIGIBLE_MODELS:'No eligible 512k+ models',DISCOVERY_REJECTED:'Catalog access rejected',DISCOVERY_UNAVAILABLE:'Catalog unavailable',DISABLED:'Billing category disabled',CONNECT_ACCOUNT:'Connect account',EXCLUDED:'Excluded by your preference'};
 function node(tag,text){const n=document.createElement(tag);n.textContent=text;return n}
+const healthLabels={VERIFIED:'Verified recently',FAILED:'Failed / blocked',UNTESTED:'Not inference-tested',STALE:'Check expired',RECHECK_DUE:'Recheck due'};
+function healthBadge(health={state:'UNTESTED'}){const s=health.state||'UNTESTED',n=node('span',healthLabels[s]||s);n.className='health health-'+(s==='VERIFIED'?'green':s==='FAILED'?'red':'amber');return n}
+function renderHealth(data){
+ el('verifiedFreeList').replaceChildren();
+ for(const route of data.verified_free_routes||[]){const li=node('li',route.provider+' / '+route.model+' · checked '+new Date(route.checked_at).toLocaleString()+' ');li.append(healthBadge({state:'VERIFIED'}));el('verifiedFreeList').append(li)}
+ if(!el('verifiedFreeList').children.length)el('verifiedFreeList').append(node('li','No free route has a recent successful inference check. Other eligible routes may still work; catalog presence alone is not proof.'));
+}
 function describeRoute(route){return route.provider+' / '+route.model+' · '+route.billing.replaceAll('_',' ')+' · '+route.context_tokens.toLocaleString()+' context tokens · '+route.state+(route.status_code?' (HTTP '+route.status_code+')':'')+' · '+new Date(route.finished_at||route.started_at).toLocaleString()}
 function renderActivity(data){
  el('lastRoute').textContent=data.last_success_details?describeRoute(data.last_success_details):data.last_success||'No successful request recorded since server restart.';
@@ -63,26 +77,39 @@ function renderActivity(data){
  el('freePreferenceStatus').replaceChildren();
  for(const [index,p] of (data.free_model_preferences||[]).entries()){
   const ready=p.available_free_routes||[],eligible=p.eligible_free_routes||[];
-  el('freePreferenceStatus').append(node('li',(index+1)+'. '+p.name+' — '+(ready.length?ready.length+' available free route(s)':eligible.length?'Free routes cooling down or excluded':'No eligible free route discovered')));
+  el('freePreferenceStatus').append(node('li',(index+1)+'. '+p.name+' — '+(ready.length?ready.length+' eligible free route(s) outside cooldown':eligible.length?'Free routes cooling down or excluded':'No eligible free route discovered')));
  }
 }
 async function api(path,body){const r=await fetch(path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-FCC-Admin':'1'},body:body===undefined?undefined:JSON.stringify(body)});if(r.status===401){location.href='/admin/login';throw Error('Sign in required')}const data=await r.json();if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:'Request failed');return data}
 function render(data){
  renderActivity(data);
  renderSelection(data);
+ renderHealth(data);
  el('eligible').textContent=data.eligible_models;el('available').textContent=data.available_models;
  el('providers').textContent=data.providers.filter(x=>x.models>0).length;el('note').textContent=data.note;
  el('notice').textContent=(data.automatic?'Automatic routing enabled. ':'Automatic routing disabled in settings. ')+'Catalog checked '+new Date(data.refreshed_at).toLocaleString();
  el('rows').replaceChildren();
  for(const p of data.providers){
   const tr=node('tr',''),name=node('td',p.name),state=node('td',labels[p.state]||p.state),models=node('td',String(p.models)),setup=node('td','');
+  tr.dataset.provider=p.provider;
+  state.append(document.createElement('br'),healthBadge({state:p.health_state||'UNTESTED'}));
   if(p.retry_at)state.append(node('small','Retry check: '+new Date(p.retry_at).toLocaleString()));
   if(p.cooldown_reasons?.length)state.append(node('small',p.cooldown_reasons.map(x=>x.replaceAll('_',' ')).join('; ')));
   if(p.http_status)state.append(node('small','HTTP '+p.http_status));
   if(p.message)state.append(node('small',p.message));
   if(p.coverage==='PARTIAL')state.append(node('small','Partial catalog coverage'));
   if(p.below_context_minimum)state.append(node('small',p.below_context_minimum+' catalog models have default context below 512,000. Experimental maxima are not used.'));
-  if((p.model_ids||[]).length){const d=node('details','');d.append(node('summary','Show models'),node('p',(p.model_details||p.model_ids.map(id=>({id}))).map(m=>m.id+(m.context_tokens?' — '+m.context_tokens.toLocaleString()+' context tokens':'')+(m.billing?' · '+m.billing.replace('_',' '):'')).join('; ')));models.append(d)}
+  if((p.model_ids||[]).length){
+   const d=node('details','');d.append(node('summary','Show models'));
+   for(const m of p.model_details||p.model_ids.map(id=>({id}))){
+    const item=node('div',m.id+(m.context_tokens?' — '+m.context_tokens.toLocaleString()+' context tokens':'')+(m.billing?' · '+m.billing.replaceAll('_',' '):''));item.className='model-health';
+    item.append(document.createElement('br'),healthBadge(m.health));
+    if(m.health?.checked_at)item.append(node('small','Inference check: '+new Date(m.health.checked_at).toLocaleString()+(m.health.status_code?' · HTTP '+m.health.status_code:'')));
+    if(m.cooldown_reason)item.append(node('small',m.cooldown_reason.replaceAll('_',' ')));
+    if(m.health?.retry_at)item.append(node('small','Retry check: '+new Date(m.health.retry_at).toLocaleString()));
+    d.append(item);
+   }models.append(d)
+  }
   if(p.mode==='free_account'){
    const label=node('label',''),check=document.createElement('input');check.type='checkbox';check.checked=p.account_confirmed===true;check.disabled=p.state==='MISSING_KEY';
    label.append(check,document.createTextNode('This key belongs to a free account with paid billing disabled.'));
@@ -119,7 +146,7 @@ function drawSelectionModels(model=''){
  const p=selectionData?.providers.find(p=>p.provider===el('selectionProvider').value);
  const models=selectionModels(p);
  el('selectionModel').replaceChildren(new Option('Best eligible model in this provider',''));
- for(const m of models)el('selectionModel').append(new Option(m.id+' · '+m.context_tokens.toLocaleString()+' context · '+(m.available?'available':'unavailable; automatic fallback'),m.id));
+ for(const m of models)el('selectionModel').append(new Option(m.id+' · '+m.context_tokens.toLocaleString()+' context · '+(m.available?(healthLabels[m.health?.state]||'Not inference-tested'):'unavailable; automatic fallback'),m.id));
  el('selectionModel').value=model;
  el('useSelection').disabled=!models.length||p?.state==='EXCLUDED';
 }
@@ -174,5 +201,5 @@ el('savePolicy').onclick=async()=>{el('savePolicy').disabled=true;el('policyNoti
 };
 api('/admin/api/free/status').then(data=>{render(data);renderPolicy(data)}).catch(e=>el('notice').textContent=e.message);
 let activityLoading=false;
-setInterval(async()=>{if(document.hidden||activityLoading)return;activityLoading=true;try{const data=await api('/admin/api/free/status');renderActivity(data);renderSelection(data)}catch(e){el('activityUpdated').textContent='Route status unavailable: '+e.message}finally{activityLoading=false}},10000);
+setInterval(async()=>{if(document.hidden||activityLoading)return;activityLoading=true;try{render(await api('/admin/api/free/status'))}catch(e){el('activityUpdated').textContent='Route status unavailable: '+e.message}finally{activityLoading=false}},10000);
 </script></body></html>

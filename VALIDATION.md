@@ -1,6 +1,51 @@
-# Validation — 2026-09-20
+# Validation — 2026-09-21
 
 Release: `6.2.46+rnb.1`, Windows, Python 3.14.0.
+
+## Gateway fallback and inference health — 2026-09-21 IST
+
+Account-wide API-plan denials now skip the affected provider scope. Automatic
+selection reserves room for other providers, preserves billing order and buffers
+initial stream metadata so an early error/EOF/timeout can fall back before any
+output is committed. Text, reasoning and tool output still stop replay.
+
+The protected route-health store records actual completed inference with output.
+Green expires after 15 minutes; failed routes remain excluded during cooldown and
+return as recheck-due afterward. Health is bound to provider credentials and
+billing category, survives restart, and affects selection within each category.
+The Admin page and [Free provider guide](docs/FREE_PROVIDER_GUIDE.md) distinguish
+catalog eligibility from recently verified free capacity.
+
+**520 scoped tests passed in 33.23 seconds**:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q -n 4 security_tests tests/application/test_reasoning.py tests/application/test_execution.py tests/api/test_classifier_response.py tests/contracts/test_startup_import_boundaries.py tests/contracts/test_provider_catalog_order.py tests/contracts/test_admin_provider_manifest.py tests/config/test_provider_catalog.py tests/config/test_admin_status.py tests/providers/test_model_token_limit_profiles.py tests/providers/test_credential_validation.py tests/providers/test_gemini.py tests/providers/test_failure_policy.py tests/core/test_failures.py --tb=short --show-capture=no
+```
+
+The new regressions cover wrapped/unwrapped SDK plan errors, generic 403 isolation,
+credential rotation, restart persistence, different-provider fallback for all
+three ingress interfaces, header-only failures, heartbeat deadlines, tool-output
+commitment, candidate reservation, billing order, green expiry, recheck priority,
+shared quota blocking and exclusion of paid routes from the verified-free list.
+Fixtures are synthetic and deny outbound networking.
+
+All **12 installed-Chrome smoke checks passed**, including green/red/amber
+rendering, timed health expiry/recovery and the empty verified-free guide. The
+published screenshot uses synthetic routes and credentials. Ruff and diff checks
+passed.
+
+This is a scoped result, not a clean full-suite claim. An additional run of
+`tests/api/test_execution_failure_contract.py` had 25 failures because its
+unauthenticated requests received the fork's mandatory HTTP 401 guard before
+reaching the provider behavior under test. Those legacy cases are not included
+in the passing scope above. Existing broader-suite limitations below remain.
+
+At **2026-09-20 18:30:41 UTC (September 21, 00:00:41 IST)**, the restarted local
+gateway completed a real authenticated Messages request with text through an
+enabled paid-API route. The Admin health record correctly showed that exact route
+as verified and did not add it to the free list. This bounded live request is
+not proof that every configured provider works. Provider-account diagnostics and
+credentials are excluded from the public artifacts.
 
 ## Maximum reasoning across ingress and fallback — 2026-09-20
 

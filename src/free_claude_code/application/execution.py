@@ -18,6 +18,7 @@ from free_claude_code.core.anthropic import (
     get_token_count,
 )
 from free_claude_code.core.failures import ExecutionFailure, FailureKind
+from free_claude_code.core.fallback_order import prefer_next_provider
 from free_claude_code.core.free_stream import FreeStreamCheck
 from free_claude_code.core.openai_responses import (
     OpenAIResponsesRequest,
@@ -316,7 +317,7 @@ class ProviderExecutor:
         """Start and consume candidates through one protocol-blind lifecycle."""
 
         primary = resolved.primary
-        candidates = (primary, *resolved.fallbacks)
+        candidates = [primary, *resolved.fallbacks]
         gateway_model = resolved.original_model
         route_trace: dict[str, object] = {
             "stage": "routing",
@@ -381,6 +382,8 @@ class ProviderExecutor:
                 )
                 provider_stream: AsyncIterator[str] | None = None
                 candidate_committed = False
+                initial_chunks: list[str] = []
+                initial_bytes = 0
                 local_request_error = False
                 candidate_failure: ExecutionFailure | None = None
                 try:
@@ -454,6 +457,22 @@ class ProviderExecutor:
                             continue
                         if stream_check is not None:
                             stream_check.feed(chunk)
+                            if not candidate_committed:
+                                initial_chunks.append(chunk)
+                                initial_bytes += len(chunk.encode())
+                                if initial_bytes > 2 * 1024 * 1024:
+                                    raise ExecutionFailure(
+                                        FailureKind.UPSTREAM,
+                                        502,
+                                        "Provider sent too much stream metadata before output.",
+                                        False,
+                                    )
+                                if not (
+                                    stream_check.has_output or stream_check.complete
+                                ):
+                                    continue
+                                chunk = "".join(initial_chunks)
+                                initial_chunks.clear()
                         if not candidate_committed:
                             candidate_committed = True
                             if index > 0:
@@ -509,7 +528,10 @@ class ProviderExecutor:
                 if candidate_failure is None:
                     if free_model is not None:
                         self._free_pool.record_success(
-                            free_model, request_id=request_id
+                            free_model,
+                            request_id=request_id,
+                            settings=self._free_settings,
+                            has_output=stream_check.has_output,
                         )
                     return
                 if free_model is not None:
@@ -523,6 +545,14 @@ class ProviderExecutor:
                 last_failure = candidate_failure
                 if candidate_committed or index + 1 >= len(candidates):
                     raise candidate_failure
+                if self._free_pool is not None:
+                    prefer_next_provider(
+                        candidates,
+                        index,
+                        billing=lambda item: (
+                            self._free_models[item.provider_model_ref].billing
+                        ),
+                    )
                 next_target = candidates[index + 1]
                 self._trace_fallback_started(
                     request_id=request_id,

@@ -66,7 +66,9 @@ async def test_model_order_overrides_provider_order_and_last_success(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_failure_then_return_to_deepseek_after_cooldown(monkeypatch):
+async def test_failed_preference_needs_recheck_before_displacing_healthy_fallback(
+    monkeypatch,
+):
     ds = route("nvidia_nim", "deepseek-v4.1-flash")
     kimi = route("kilo", "kimi-k3:free")
     pool = pool_with(monkeypatch, ds, kimi)
@@ -75,10 +77,12 @@ async def test_failure_then_return_to_deepseek_after_cooldown(monkeypatch):
         settings, ds, ExecutionFailure(FailureKind.UPSTREAM, 503, "busy", False)
     )
     assert await pool.select(settings, {}) == (kimi,)
-    pool.record_success(kimi)
-    # Expire the recorded cooldown; a successful fallback must not become sticky.
+    pool.record_success(kimi, settings=settings)
+    # Expiry permits rechecking, but does not prove the failed route recovered.
     for entry in pool._cooldowns.values():
         entry["until"] = 0
+    assert await pool.select(settings, {}) == (kimi, ds)
+    pool.record_success(ds, settings=settings)
     assert await pool.select(settings, {}) == (ds, kimi)
 
 
