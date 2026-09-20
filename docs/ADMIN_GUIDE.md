@@ -33,7 +33,7 @@ The lower part of the page includes more cloud providers and the **Local provide
 ## Check readiness and start coding
 
 1. Save the settings for providers you intend to use.
-2. Open **Routing controls** and complete required free-account confirmations. Optional switches permit subscriptions and paid APIs. Choose billing priority, move providers up/down, and uncheck unwanted providers; save preferences. Paid APIs may charge money and subscriptions may consume credits. Set limits with the provider; this gateway has no monetary budget cap.
+2. Open **Routing controls** and complete required free-account confirmations. Optional switches permit subscriptions and paid APIs. Choose billing priority and the preferred free-model order (DeepSeek V4.1 Flash, Kimi K3, Qwen 3.8 Max, GLM 5.3 Flash by default). Availability appears beside each preference. Move providers up/down within those tiers, and uncheck unwanted providers; save preferences. Paid APIs may charge money and subscriptions may consume credits. Set limits with the provider; this gateway has no monetary budget cap.
 3. Select **Refresh catalogs**. Review missing credentials, catalog failures, eligible models, context and cooldowns. Refreshing does not reset quota.
 4. Launch Claude Code using `Claude-Free.ps1` from the repository, or invoke that launcher by its full path from your coding project. Automatic mode selects an eligible model without a manual model choice.
 

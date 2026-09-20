@@ -25,13 +25,20 @@ class RoutingPolicyPayload(BaseModel):
     billing_priority: list[str]
     provider_priority: list[str]
     disabled_providers: list[str]
+    free_model_priority: list[str] | None = None
 
 
 @router.post("/admin/api/free/policy")
 async def routing_policy(body: RoutingPolicyPayload, request: Request):
     services = request.app.state.services
+    preferences = {}
+    if body.free_model_priority is not None:
+        preferences["FREE_MODEL_PRIORITY"] = (
+            ",".join(body.free_model_priority) or "none"
+        )
     result = await services.admin.apply_admin_config(
         {
+            **preferences,
             "ALLOW_SUBSCRIPTION_MODELS": body.allow_subscriptions,
             "ALLOW_PAID_API_MODELS": body.allow_paid_api,
             "ROUTING_PRIORITY": ",".join(body.billing_priority),

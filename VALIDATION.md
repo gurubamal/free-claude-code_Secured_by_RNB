@@ -2,6 +2,20 @@
 
 Release: `6.2.46+rnb.1`, Windows, Python 3.14.0.
 
+## Preferred free models update — 2026-09-20
+
+Default free preference: DeepSeek V4.1 Flash, Kimi K3, Qwen 3.8 Max, then GLM 5.3 Flash. Preferences operate across eligible free providers before provider order or last success, and return to the preferred model after cooldown. Version matching excludes older DeepSeek, FlashX, preview/batch and unverified latest aliases. Billing permission, tool support, the 512k minimum and reserved paid/subscription fallback slots remain intact.
+
+**100 scoped routing tests passed in 13.75 seconds**, covering the new ordering, all three ingress selectors, cooldown/fallback recovery, context/tool exclusions, paid isolation, editable/disabled preferences, and compatible policy updates:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q -n 4 security_tests/test_free_model_preferences.py security_tests/test_paid_routing.py security_tests/test_free_pool.py security_tests/test_free_chat.py security_tests/test_free_quota.py
+```
+
+The installed-Chrome smoke run passed nine checks, including displaying/editing/saving preference order and showing a missing free route. It used synthetic API fixtures, not real model inference. The updated routing screenshot contains only synthetic route data. Earlier suite limitations below still apply.
+
+At **10:49:26 UTC (16:19:26 IST)**, the restarted local gateway returned HTTP 200 and the exact saved preference order with a 512,000-token floor. None of the four families had an eligible free route in that installation's current catalog. This verifies deployed configuration, not free availability or successful inference with those models. No credentials or authenticated account contents are included here.
+
 ## Google account OAuth update — 2026-09-20
 
 Added browser authorization for the public Gemini Developer API using the operator's own Google Desktop OAuth client and project. No Gemini CLI credentials or shared Google client secrets are imported. The existing paid-API switch gates automatic use; reported input context must still meet 512,000 tokens and tool metadata must be available. See [setup and scope](docs/GOOGLE_ACCOUNT.md).

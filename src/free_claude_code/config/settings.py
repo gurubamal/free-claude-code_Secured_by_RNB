@@ -15,6 +15,7 @@ from pydantic import (
 )
 
 from .constants import HTTP_CONNECT_TIMEOUT_DEFAULT
+from .free_model_preferences import DEFAULT_FREE_MODEL_PRIORITY, FREE_MODEL_FAMILIES
 from .model_refs import parse_model_fallbacks
 from .nim import NimSettings
 from .provider_catalog import (
@@ -403,6 +404,26 @@ class Settings(BaseModel):
     routing_disabled_providers: OptionalNonEmptyString = Field(
         default=None, validation_alias="ROUTING_DISABLED_PROVIDERS"
     )
+    free_model_priority: OptionalNonEmptyString = Field(
+        default=DEFAULT_FREE_MODEL_PRIORITY,
+        validation_alias="FREE_MODEL_PRIORITY",
+    )
+
+    @field_validator("free_model_priority")
+    @classmethod
+    def validate_free_model_priority(cls, value):
+        if value is None:
+            return None
+        if value.strip().lower() == "none":
+            return "none"
+        items = [item.strip().lower() for item in value.split(",")]
+        if len(items) != len(set(items)) or any(
+            item not in FREE_MODEL_FAMILIES for item in items
+        ):
+            raise ValueError(
+                "Use unique free-model family IDs from the routing controls"
+            )
+        return ",".join(items)
 
     @field_validator("routing_priority")
     @classmethod

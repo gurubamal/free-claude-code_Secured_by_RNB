@@ -109,11 +109,18 @@ _NON_PROVIDER_FIELDS: tuple[ConfigFieldSpec, ...] = (
         description="Comma-separated order of free, subscription, paid_api. Only enabled categories are used.",
     ),
     ConfigFieldSpec(
+        "FREE_MODEL_PRIORITY",
+        "Preferred free model order",
+        "models",
+        settings_attr="free_model_priority",
+        description="Free routes only: deepseek-v4.1-flash,kimi-k3,qwen3.8-max,glm-5.3-flash. Reorder or remove families; use none to disable preferences. Available preferred models precede provider order and last success; other eligible free models follow. Requires live free eligibility, tools and 512k+ context.",
+    ),
+    ConfigFieldSpec(
         "ROUTING_PROVIDER_PRIORITY",
         "Provider fallback order",
         "models",
         settings_attr="routing_provider_priority",
-        description="Provider IDs in preferred order within each billing category. Unlisted providers follow afterward.",
+        description="Provider IDs in preferred order within each billing category. Free-model preference takes precedence for free routes. Unlisted providers follow afterward.",
     ),
     ConfigFieldSpec(
         "ROUTING_DISABLED_PROVIDERS",

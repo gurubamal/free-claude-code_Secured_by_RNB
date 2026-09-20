@@ -324,6 +324,20 @@ def main():
                 )
                 free_status = {
                     "automatic": True,
+                    "free_model_priority": [
+                        "deepseek-v4.1-flash",
+                        "kimi-k3",
+                        "qwen3.8-max",
+                        "glm-5.3-flash",
+                    ],
+                    "free_model_preferences": [
+                        {
+                            "family": "deepseek-v4.1-flash",
+                            "name": "DeepSeek V4.1 Flash",
+                            "eligible_free_routes": [],
+                            "available_free_routes": [],
+                        }
+                    ],
                     "minimum_context_tokens": 512000,
                     "refreshed_at": "2026-09-20T08:00:00+00:00",
                     "eligible_models": 2,
@@ -391,6 +405,12 @@ def main():
                         ]
                         assert body["provider_priority"] == ["gemini", "open_router"]
                         assert body["disabled_providers"] == ["open_router"]
+                        assert body["free_model_priority"] == [
+                            "deepseek-v4.1-flash",
+                            "kimi-k3",
+                            "glm-5.3-flash",
+                            "qwen3.8-max",
+                        ]
                         policy_requests.append(body)
                         free_status.update(body)
                     if route.request.url.endswith("/accounts/gemini"):
@@ -409,6 +429,18 @@ def main():
                 ).wait_for()
                 page.locator("td").filter(has_text="Cooling down").wait_for()
                 assert page.locator("#eligible").inner_text() == "2"
+                assert (
+                    page.locator("#freeModelOrder")
+                    .input_value()
+                    .startswith("deepseek-v4.1-flash,kimi-k3")
+                )
+                assert (
+                    "No eligible free route discovered"
+                    in page.locator("#freePreferenceStatus").inner_text()
+                )
+                page.locator("#freeModelOrder").fill(
+                    "deepseek-v4.1-flash,kimi-k3,glm-5.3-flash,qwen3.8-max"
+                )
                 assert (
                     "gemini / synthetic-512k" in page.locator("#lastRoute").inner_text()
                 )
@@ -453,7 +485,7 @@ def main():
                 page.screenshot(path=str(output / "free-routing.png"), full_page=True)
                 assert not failures, failures
                 checks.append(
-                    "Chrome route identity and timed refresh, 512k+ display, acknowledgments, paid switches, provider reordering, exclusions and saving (synthetic API fixtures)"
+                    "Chrome route identity and timed refresh, 512k+ display, acknowledgments, paid switches, free-model preference availability and editing, provider reordering, exclusions and saving (synthetic API fixtures)"
                 )
                 page.goto(url + "/admin")
                 page.locator("#providerGroups .provider-strip").first.wait_for(

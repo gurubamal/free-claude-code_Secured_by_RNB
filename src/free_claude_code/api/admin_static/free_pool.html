@@ -27,7 +27,10 @@
 <option value="paid_api,free,subscription">Paid APIs → free → subscriptions</option>
 <option value="paid_api,subscription,free">Paid APIs → subscriptions → free</option>
 </select></label>
-<p>Move providers up or down to choose priority within each billing category. Uncheck a provider to exclude it. Within each category, try providers in order before their sibling models. Each request considers up to 12 candidates, reserving a slot for every eligible billing category.</p>
+<label style="max-width:none">Preferred free model order <input id="freeModelOrder" type="text" style="width:95%" aria-describedby="freePreferenceHelp"></label>
+<p id="freePreferenceHelp">Use these family IDs in your preferred order: deepseek-v4.1-flash, kimi-k3, qwen3.8-max, glm-5.3-flash. Free routes try available preferred families first across providers, then other eligible free models. An empty list uses provider order. This does not make a paid model free. Every new request returns to the highest available preference after cooldown.</p>
+<ul id="freePreferenceStatus" aria-label="Preferred free model availability"></ul>
+<p>Move providers up or down to choose priority within each billing category and free-model preference tier. Uncheck a provider to exclude it. Each request considers up to 12 candidates, reserving a slot for every eligible billing category.</p>
 <details style="max-width:none;margin:18px 0"><summary>Provider fallback order and exclusions</summary><ol id="providerOrder" aria-label="Provider fallback priority"></ol></details>
 <button id="savePolicy" type="button">Save routing preferences</button><p id="policyNotice" role="status"></p>
 </section>
@@ -44,6 +47,11 @@ function renderActivity(data){
  el('lastRoute').textContent=data.last_success_details?describeRoute(data.last_success_details):data.last_success||'No successful request recorded since server restart.';
  el('latestAttempt').textContent=data.latest_attempt?describeRoute(data.latest_attempt):'No attempt recorded since server restart.';
  el('activityUpdated').textContent='Route status checked '+new Date().toLocaleTimeString();
+ el('freePreferenceStatus').replaceChildren();
+ for(const [index,p] of (data.free_model_preferences||[]).entries()){
+  const ready=p.available_free_routes||[],eligible=p.eligible_free_routes||[];
+  el('freePreferenceStatus').append(node('li',(index+1)+'. '+p.name+' — '+(ready.length?ready.length+' available free route(s)':eligible.length?'Free routes cooling down or excluded':'No eligible free route discovered')));
+ }
 }
 async function api(path,body){const r=await fetch(path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-FCC-Admin':'1'},body:body===undefined?undefined:JSON.stringify(body)});if(r.status===401){location.href='/admin/login';throw Error('Sign in required')}const data=await r.json();if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:'Request failed');return data}
 function render(data){
@@ -78,6 +86,7 @@ function renderPolicy(data){
  el('allowSubscriptions').checked=data.allow_subscriptions===true;
  el('allowPaidApi').checked=data.allow_paid_api===true;
  el('billingOrder').value=(data.billing_priority||['free','subscription','paid_api']).join(',');
+ el('freeModelOrder').value=(data.free_model_priority||[]).join(',');
  const priority=data.provider_priority||[],disabled=new Set(data.disabled_providers||[]);
  policyProviders=[...data.providers].sort((a,b)=>{
   const ai=priority.indexOf(a.provider),bi=priority.indexOf(b.provider);
@@ -101,6 +110,7 @@ el('savePolicy').onclick=async()=>{el('savePolicy').disabled=true;el('policyNoti
  try{const data=await api('/admin/api/free/policy',{
   allow_subscriptions:el('allowSubscriptions').checked,allow_paid_api:el('allowPaidApi').checked,
   billing_priority:el('billingOrder').value.split(','),provider_priority:policyProviders.map(p=>p.provider),
+  free_model_priority:el('freeModelOrder').value.split(',').map(x=>x.trim()).filter(Boolean),
   disabled_providers:policyProviders.filter(p=>!p.enabled).map(p=>p.provider)
  });render(data);renderPolicy(data);el('policyNotice').textContent='Saved. New requests follow this policy. Requests already producing output are not replayed.'}
  catch(e){el('policyNotice').textContent=e.message}finally{el('savePolicy').disabled=false}

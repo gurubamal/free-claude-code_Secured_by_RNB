@@ -14,6 +14,12 @@ from urllib.parse import urlencode, urljoin, urlsplit
 
 import httpx
 
+from free_claude_code.config.free_model_preferences import (
+    FREE_MODEL_FAMILIES,
+    free_model_family,
+    free_preference_rank,
+    preferred_free_families,
+)
 from free_claude_code.config.free_providers import (
     POLICY_BY_ID,
     ROUTING_PROVIDERS,
@@ -700,6 +706,7 @@ class AutomaticFreePool:
             and m.context >= max(context, MIN_CONTEXT_TOKENS)
         ]
         groups_by_billing = {kind: [] for kind in settings.routing_priority.split(",")}
+        preferences = preferred_free_families(settings.free_model_priority)
         provider_order = (settings.routing_provider_priority or "").split(",")
         provider_order = [p for p in provider_order if p] + [
             p.provider_id
@@ -718,6 +725,9 @@ class AutomaticFreePool:
             ]
             models.sort(
                 key=lambda m: (
+                    free_preference_rank(m.model_id, preferences)
+                    if billing == "free"
+                    else 0,
                     m.ref != self._last_success,
                     not any(
                         word in m.model_id.lower()
@@ -739,16 +749,23 @@ class AutomaticFreePool:
         # Honor category priority; rotate providers within a category. Reserve
         # one slot per later category so a large catalog cannot starve fallback.
         categories = [
-            [m for row in zip_longest(*groups) for m in row if m is not None]
-            for groups in groups_by_billing.values()
+            sorted(
+                [m for row in zip_longest(*groups) for m in row if m is not None],
+                key=lambda m: (
+                    free_preference_rank(m.model_id, preferences)
+                    if billing == "free"
+                    else 0
+                ),
+            )
+            for billing, groups in groups_by_billing.items()
             if groups
         ]
         ordered = []
         for index, category in enumerate(categories):
             budget = 12 - len(ordered) - (len(categories) - index - 1)
             ordered.extend(category[:budget])
-        # Last success breaks ties inside a provider. It must not override the
-        # user's billing-category or provider priority on the next request.
+        # Last success cannot displace a preferred free family on the next request.
+        # Stable sorting preserves provider rotation within each preference tier.
         if not ordered:
             active = [
                 entry
@@ -976,6 +993,31 @@ class AutomaticFreePool:
             rows.append(row)
         return {
             "automatic": settings.auto_free_models,
+            "free_model_priority": preferred_free_families(
+                settings.free_model_priority
+            ),
+            "free_model_preferences": [
+                {
+                    "family": family,
+                    "name": FREE_MODEL_FAMILIES[family],
+                    "eligible_free_routes": [
+                        m.ref
+                        for m in self._catalog
+                        if m.billing == "free"
+                        and free_model_family(m.model_id) == family
+                    ],
+                    "available_free_routes": [
+                        m.ref
+                        for m in self._catalog
+                        if m.billing == "free"
+                        and free_model_family(m.model_id) == family
+                        and not self.cooldown(settings, m)
+                        and m.provider_id
+                        not in (settings.routing_disabled_providers or "").split(",")
+                    ],
+                }
+                for family in preferred_free_families(settings.free_model_priority)
+            ],
             "allow_subscriptions": settings.allow_subscription_models,
             "allow_paid_api": settings.allow_paid_api_models,
             "billing_priority": settings.routing_priority.split(","),
