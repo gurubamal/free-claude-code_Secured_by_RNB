@@ -195,7 +195,11 @@ def test_chat_daily_quota_sends_one_request_and_stops(monkeypatch, stream):
         requests=SimpleNamespace(current_settings=lambda: settings),
         admin=SimpleNamespace(admin_status=None),
     )
-    with TestClient(create_app(services)) as client:
+    from free_helpers import freeze_pool, model
+
+    app = create_app(services)
+    freeze_pool(app.state.free_pool, [model("open_router", "openrouter/free")])
+    with TestClient(app) as client:
         response = client.post(
             "/v1/chat/completions",
             headers={"Authorization": "Bearer " + settings.proxy_auth_token},

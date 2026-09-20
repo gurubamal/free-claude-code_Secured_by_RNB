@@ -26,6 +26,7 @@ class ExecutionFailure(Exception):
     status_code: int
     message: str
     retryable: bool
+    retry_after_seconds: float | None = None
 
     def __post_init__(self) -> None:
         Exception.__init__(self, self.message)

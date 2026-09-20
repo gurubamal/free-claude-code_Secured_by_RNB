@@ -49,6 +49,7 @@ async def _create_messages_response(
     *,
     request_id: str,
     request_headers: Mapping[str, str] | None = None,
+    free_pool=None,
 ) -> object:
     lease: RequestRuntimeLease | None = None
     try:
@@ -62,6 +63,7 @@ async def _create_messages_response(
             generation_id=lease.generation_id,
             request_headers=request_headers,
             model_info_lookup=lease.model_info,
+            free_pool=free_pool,
         )
         response = await handler.create(request_data, request_id=request_id)
     except ApplicationError as exc:
@@ -86,6 +88,7 @@ async def _create_responses_response(
     *,
     request_id: str,
     request_headers: Mapping[str, str] | None = None,
+    free_pool=None,
 ) -> object:
     lease: RequestRuntimeLease | None = None
     try:
@@ -96,6 +99,7 @@ async def _create_responses_response(
             provider_resolver=_provider_resolver(lease),
             generation_id=lease.generation_id,
             request_headers=request_headers,
+            free_pool=free_pool,
         )
         response = await handler.create(request_data, request_id=request_id)
     except ApplicationError as exc:
@@ -131,6 +135,7 @@ async def create_message(
         request_data,
         request_id=get_request_id(request),
         request_headers=request.headers,
+        free_pool=request.app.state.free_pool,
     )
 
 
@@ -152,6 +157,7 @@ async def create_response(
         request_data,
         request_id=get_request_id(request),
         request_headers=request.headers,
+        free_pool=request.app.state.free_pool,
     )
 
 

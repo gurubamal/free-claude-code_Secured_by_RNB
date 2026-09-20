@@ -55,8 +55,10 @@ def read_model_catalog(
         model = CatalogModel(
             wire_slug=ref,
             provider_model_ref=ref,
-            display_name="Automatic free models",
+            display_name="Automatic free models (512k+ context)",
             supports_reasoning=None,
+            context_window_tokens=512000,
+            max_output_tokens=8192,
         )
         return ModelCatalog(models=(model,), default_model_id=ref)
     models: dict[str, CatalogModel] = {}

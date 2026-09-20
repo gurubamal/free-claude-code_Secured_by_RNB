@@ -1,6 +1,6 @@
 # free-claude-code_Secured_by_RNB
 
-A local gateway for coding assistants, maintained as the **RNB hardening fork**. It connects supported clients to automatic free-model routing through OpenRouter and adds recoverable administrator access and protected credential storage on Windows.
+A local gateway for coding assistants, maintained as the **RNB hardening fork**. It connects supported clients to automatic routing across configured free providers and adds recoverable administrator access and protected credential storage on Windows.
 
 This repository builds on an existing MIT-licensed project; the upstream source and license are credited below. This guide describes the RNB version and its changes.
 
@@ -12,7 +12,7 @@ This repository builds on an existing MIT-licensed project; the upstream source 
 | Administrator login | Unique temporary password, required first-login change, expiring browser sessions and local recovery |
 | Credential storage | Windows user-bound DPAPI encryption for managed provider credentials and Admin state; permanent Admin passwords are hashed |
 | Password reset | Invalidates browser sessions while preserving provider configuration |
-| Automatic routing | One free-model route, zero provider price ceilings and filtering of caller-paid routing/plugin extras |
+| Automatic routing | Live free-model discovery, 512k+ context floor, independent-provider fallback, persistent cooldowns and paid-routing guards |
 | Claude launcher | Automatic proxy startup, inherited credential-environment filtering, normal permission prompts, and inherited hooks/MCP disabled |
 | Remote messaging | Disabled by default; explicit sender/channel checks and restricted managed Claude tools |
 | Dependencies | Locked installation, pinned build tools and security minimums for packages flagged by the dated audit |
@@ -21,7 +21,7 @@ The proxy and provider-adapter foundation comes from upstream. The RNB additions
 
 ## Verified scope
 
-On **2026-09-20**, the Windows build passed **1,103 scoped tests** after the daily-quota fix. Earlier checks that day covered browser login/reset/restart and a live Claude scratch-file coding task. The dependency audit reported no known findings in 108 checked third-party package entries; the local fork itself was not covered by that advisory lookup. See [VALIDATION.md](VALIDATION.md) for commands, versions and exclusions.
+The dated checks in [VALIDATION.md](VALIDATION.md) distinguish the earlier OpenRouter-only release from the current provider-pool update. Earlier checks on **2026-09-20** covered browser login/reset/restart and a live Claude scratch-file coding task; they are not proof of live inference on every newly supported provider. The dependency audit reported no known findings in 108 checked third-party package entries; the local fork itself was not covered by that advisory lookup. See [VALIDATION.md](VALIDATION.md) for commands, versions and exclusions.
 
 These are bounded checks. They do not establish zero vulnerabilities, indefinite task completion or compatibility with every coding harness.
 
@@ -42,7 +42,9 @@ Open <http://127.0.0.1:8082/admin>. Username: **admin**. First launch prints a u
 .\Run-Hardened.ps1 show-initial-password
 ```
 
-Add your own OpenRouter API key in Admin. Automatic routing uses `openrouter/free`; no model-selection step is needed. Provider credentials are encrypted for your Windows user, outside the repository. This repository contains no working provider credentials.
+Add your provider API keys in **Admin → Providers**, save them, then open **Automatic free routing** at <http://127.0.0.1:8082/admin/free>. For account-dependent free tiers, confirm that each saved key belongs to a free account with paid billing disabled. The acknowledgment binds to that key and must be repeated when it changes. No model-selection step is needed. Provider credentials are encrypted for your Windows user, outside the repository. This repository contains no working provider credentials.
+
+The status page distinguishes missing keys, missing acknowledgments, catalog failures, eligible models and cooldowns. It displays each eligible model’s context limit. Every selected model and fallback must have **at least 512,000 context tokens**, known tool support, eligible free access and enough estimated room for the actual request. Unknown or smaller context windows are excluded. See [FREE_ROUTING.md](FREE_ROUTING.md) for the provider policies and limits.
 
 ## Claude Code
 
@@ -66,7 +68,7 @@ To configure the ordinary `claude` command too:
 .\.venv\Scripts\python.exe .\configure_claude.py
 ```
 
-This updates user Claude settings and writes a separate `fcc-hardened.settings.json` profile. Its helper reads the local proxy token; the OpenRouter key is not copied into Claude settings. Previous settings are backed up with Windows DPAPI under `.fcc-hardened/backups`. Exit old Claude sessions after configuring. An old `Login expired` or subscription prompt may belong to the previous account-login session. `/login` is not the setup path for this proxy.
+This updates user Claude settings and writes a separate `fcc-hardened.settings.json` profile. Its helper reads the local proxy token; provider keys are not copied into Claude settings. Previous settings are backed up with Windows DPAPI under `.fcc-hardened/backups`. Exit old Claude sessions after configuring. An old `Login expired` or subscription prompt may belong to the previous account-login session. `/login` is not the setup path for this proxy.
 
 ## Forgotten password
 
@@ -82,17 +84,19 @@ Enter a new password twice at hidden prompts. Reset invalidates browser sessions
 
 Authenticated interfaces: `/v1/messages`, `/v1/responses`, `/v1/chat/completions`. Connect compatible clients with the local proxy credential. A Codex launcher is supplied as `Run-Hardened.ps1 codex`; it was not live-client validated for this release.
 
-Automatic routing ignores client-specified paid model names while free mode is active. Free requests carry zero provider price ceilings, exclude caller-paid routing/plugin extras, and cap output at 8,192 tokens. OpenRouter selects an available free model with the required features; this is not a benchmarked best-model selector.
+Automatic routing ignores client-specified models and manual fallback lists while free mode is active. It discovers eligible models from configured providers, tries independent providers before additional models from the same provider, and prefers the last successful eligible model on later requests. It uses current catalog/account checks, not a benchmarked best-model selector. All three API interfaces use this pool; Responses currently requires streaming.
 
-Free providers can exhaust quotas or go offline. Claude is configured for earlier automatic context compaction. Keep native session persistence enabled and resume saved sessions after an outage. Other harnesses need their own compaction/checkpoint handling. Neither model switching nor a proxy can make every context window or free quota unlimited.
+The stable client model ID remains `open_router/openrouter/free` for compatibility. It is a gateway alias: inference is sent to a selected explicit model, potentially at another provider. Opaque upstream auto routers are excluded because they could choose a model below the 512k floor. Paid routing/plugin extras are removed; OpenRouter requests additionally carry zero price ceilings. Output is capped at 8,192 tokens or the selected model's smaller output limit. The 512k minimum is a context-window requirement, not an output-token allowance.
+
+Free providers can exhaust quotas or go offline. Claude is configured for a 512,000-token compaction window with a 60% trigger. Keep native session persistence enabled and resume saved sessions after an outage. Other harnesses need their own compaction/checkpoint handling. Neither model switching nor a proxy can make every context window or free quota unlimited.
 
 ### OpenRouter daily quota (HTTP 429)
 
 `free-models-per-day` means the OpenRouter account's daily free-request allowance is exhausted. It is different from a full context window or an expired Claude login. The allowance is shared across OpenRouter free models; choosing another one does not restore it. A coding task can require many model requests, including follow-up turns after tool calls.
 
-The gateway recognizes this daily limit, stops its immediate retries and displays the provider-reported reset time in UTC. It also stops retry/recovery when this limit arrives after an Anthropic-compatible stream has started. Generic temporary rate limits still receive bounded retries. Requests are not queued for automatic restart, and a separate client can have its own retry policy.
+The gateway recognizes this daily limit, persists an OpenRouter-wide cooldown until the supplied reset, and tries an eligible independent provider if no output has been delivered. Temporary failures also cool down instead of causing repeated same-provider retries. Each request considers at most 12 candidates. Once output has started, the request is not replayed through another provider. If all eligible routes are unavailable, the gateway returns an error; it never resets an account allowance, enables paid fallback, or queues a task for automatic restart. A client can have its own retry policy.
 
-Wait for the reset, then resume your saved Claude session from the same project:
+If no independent free provider remains available, wait for capacity and resume your saved Claude session from the same project:
 
 ```powershell
 .\Claude-Free.ps1 --resume

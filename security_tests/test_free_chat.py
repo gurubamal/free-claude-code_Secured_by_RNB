@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from free_helpers import freeze_pool, model
 from starlette.testclient import TestClient
 
 from free_claude_code.api.app import create_app
@@ -41,12 +42,24 @@ def test_chat_enforces_zero_cost_and_bounded_retries(monkeypatch, statuses):
 
     monkeypatch.setattr(free_chat_routes.httpx, "AsyncClient", Upstream)
     monkeypatch.setattr(free_chat_routes.asyncio, "sleep", no_wait)
-    settings = Settings(open_router_api_key="synthetic-key")
+    settings = Settings(
+        open_router_api_key="synthetic-key",
+        groq_api_key="synthetic-groq",
+        gemini_api_key="synthetic-gemini",
+    )
     services = SimpleNamespace(
         requests=SimpleNamespace(current_settings=lambda: settings),
         admin=SimpleNamespace(admin_status=None),
     )
     app = create_app(services)
+    freeze_pool(
+        app.state.free_pool,
+        [
+            model("open_router", "openrouter/free"),
+            model("groq", "synthetic-free"),
+            model("gemini", "synthetic-free"),
+        ],
+    )
     with TestClient(app) as client:
         response = client.post(
             "/v1/chat/completions",
@@ -65,7 +78,8 @@ def test_chat_enforces_zero_cost_and_bounded_retries(monkeypatch, statuses):
     assert closed
     for request in requests:
         body = json.loads(request.content)
-        assert body["model"] == "openrouter/free"
+        assert body["model"] in {"openrouter/free", "synthetic-free"}
         assert body["max_tokens"] == 8192
-        assert all(value == 0 for value in body["provider"]["max_price"].values())
+        if request.url.host == "openrouter.ai":
+            assert all(value == 0 for value in body["provider"]["max_price"].values())
         assert "models" not in body and "plugins" not in body

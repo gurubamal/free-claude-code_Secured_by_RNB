@@ -20,6 +20,7 @@ from free_claude_code.core.diagnostics import (
 )
 from free_claude_code.core.failures import ExecutionFailure, FailureKind
 from free_claude_code.core.free_quota import daily_free_quota_from_error
+from free_claude_code.core.free_stream import retry_seconds
 
 ProviderFailureOverride = Callable[[Exception], ExecutionFailure | None]
 
@@ -105,7 +106,13 @@ def classify_provider_failure(
         upstream_name=provider_name,
         request_id=request_id,
     )
-    return replace(failure, message=message)
+    response = getattr(exc, "response", None)
+    return replace(
+        failure,
+        message=message,
+        retry_after_seconds=retry_seconds(getattr(response, "headers", None))
+        or failure.retry_after_seconds,
+    )
 
 
 def overloaded_provider_failure() -> ExecutionFailure:

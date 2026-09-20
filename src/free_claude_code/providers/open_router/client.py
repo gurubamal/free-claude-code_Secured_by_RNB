@@ -41,8 +41,8 @@ class OpenRouterChatBehavior(OpenAIChatBehavior):
         return quota.failure() if quota is not None else None
 
     def prepare_create_body(self, body):
-        if body.get("model") == FREE_MODEL:
-            result = free_request_body(body)
+        if body.get("model") == FREE_MODEL or getattr(self, "free_only", False):
+            result = free_request_body(body, model=body["model"])
             result["extra_body"] = {"provider": result.pop("provider")}
             reasoning = body.get("extra_body", {}).get("reasoning")
             if isinstance(reasoning, dict):

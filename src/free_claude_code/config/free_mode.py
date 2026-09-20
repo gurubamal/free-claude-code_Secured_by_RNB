@@ -6,9 +6,9 @@ FREE_MODEL = "openrouter/free"
 FREE_MODEL_REF = "open_router/" + FREE_MODEL
 
 
-def free_request_body(body: dict) -> dict:
+def free_request_body(body: dict, *, model: str = FREE_MODEL) -> dict:
     result = deepcopy(body)
-    result["model"] = FREE_MODEL
+    result["model"] = model
     # Do not allow paid plugins, alternate models or caller routing overrides.
     result.pop("extra_body", None)
     for key in (

@@ -2,6 +2,7 @@
 
 import importlib
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 
 from free_claude_code.application.errors import (
     ApplicationUnavailableError,
@@ -255,14 +256,40 @@ def prepare_provider(
 
     def construct(settings: Settings) -> BaseProvider:
         config = build_provider_config(descriptor, settings)
+        if settings.auto_free_models:
+            from free_claude_code.application.free_pool import local_base
+            from free_claude_code.config.free_providers import POLICY_BY_ID
+
+            policy = POLICY_BY_ID.get(provider_id)
+            if policy is None:
+                raise ApplicationUnavailableError(
+                    "Provider is outside the automatic free policy"
+                )
+            base = (
+                local_base(settings, provider_id)
+                if policy.mode == "local"
+                else descriptor.default_base_url
+            )
+            config = replace(
+                config,
+                base_url=base,
+                http_read_timeout=min(config.http_read_timeout, 45),
+                proxy=None,
+            )
         admission = ProviderAdmissionController(
             provider_name=provider_id,
             rate_limit=config.rate_limit,
             rate_window=config.rate_window,
             max_concurrency=config.max_concurrency,
+            max_attempts=1 if settings.auto_free_models else 5,
         )
-        if factory is not None:
-            return factory(config, settings, admission)
-        return create_openai_chat_provider(provider_id, config, admission)
+        provider = (
+            factory(config, settings, admission)
+            if factory is not None
+            else create_openai_chat_provider(provider_id, config, admission)
+        )
+        if settings.auto_free_models and provider_id == "open_router":
+            provider._behavior.free_only = True
+        return provider
 
     return construct

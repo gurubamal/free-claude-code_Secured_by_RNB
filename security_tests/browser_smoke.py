@@ -251,6 +251,84 @@ def main():
                 checks.append(
                     "Chrome first login, mandatory change and full Admin render"
                 )
+                free_status = {
+                    "automatic": True,
+                    "minimum_context_tokens": 512000,
+                    "refreshed_at": "2026-09-20T08:00:00+00:00",
+                    "eligible_models": 2,
+                    "available_models": 1,
+                    "note": "Synthetic browser fixture; no real provider credentials.",
+                    "providers": [
+                        {
+                            "provider": "open_router",
+                            "name": "OpenRouter",
+                            "mode": "zero_price",
+                            "state": "COOLDOWN",
+                            "models": 1,
+                            "available_models": 0,
+                            "model_ids": ["synthetic-1m"],
+                            "model_details": [
+                                {"id": "synthetic-1m", "context_tokens": 1048576}
+                            ],
+                            "retry_at": "2026-09-21T00:00:00+00:00",
+                            "source": "https://openrouter.ai/docs/api/reference/limits",
+                        },
+                        {
+                            "provider": "gemini",
+                            "name": "Gemini",
+                            "mode": "free_account",
+                            "state": "CONFIRM_FREE_ACCOUNT",
+                            "models": 1,
+                            "available_models": 1,
+                            "model_ids": ["synthetic-512k"],
+                            "model_details": [
+                                {"id": "synthetic-512k", "context_tokens": 512000}
+                            ],
+                            "account_confirmed": False,
+                            "source": "https://ai.google.dev/gemini-api/docs/billing",
+                        },
+                    ],
+                }
+                confirmation_requests = []
+
+                def free_fixture(route):
+                    if route.request.url.endswith("/accounts/gemini"):
+                        assert route.request.post_data_json == {"no_paid_billing": True}
+                        assert route.request.headers["x-fcc-admin"] == "1"
+                        confirmation_requests.append(True)
+                        free_status["providers"][1].update(
+                            account_confirmed=True, state="ELIGIBLE"
+                        )
+                    route.fulfill(json=free_status)
+
+                page.route("**/admin/api/free/**", free_fixture)
+                page.get_by_role(
+                    "link", name="Automatic free routing", exact=True
+                ).click()
+                page.get_by_role(
+                    "heading", name="Automatic free routing", exact=True
+                ).wait_for()
+                page.locator("td").filter(has_text="Cooling down").wait_for()
+                assert page.locator("#eligible").inner_text() == "2"
+                page.get_by_role("checkbox").check()
+                page.get_by_text("Eligible", exact=True).wait_for()
+                assert confirmation_requests
+                page.get_by_role("button", name="Refresh catalogs").click()
+                page.locator("#notice").filter(has_text="Catalog checked").wait_for()
+                page.locator("details summary").first.click()
+                assert (
+                    "1,048,576 context tokens"
+                    in page.locator("details").first.inner_text()
+                )
+                page.screenshot(path=str(output / "free-routing.png"), full_page=True)
+                assert not failures, failures
+                checks.append(
+                    "Chrome free routing status, 512k+ display, account confirmation and refresh (synthetic API fixtures)"
+                )
+                page.goto(url + "/admin")
+                page.locator("#providerGroups .provider-strip").first.wait_for(
+                    timeout=20000
+                )
                 page.get_by_role("link", name="Change password", exact=True).click()
                 page.locator("#password").fill(password)
                 page.locator("#login button").click()

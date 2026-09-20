@@ -75,8 +75,10 @@ class MessagesHandler:
         generation_id: int | None = None,
         request_headers: Mapping[str, str] | None = None,
         model_info_lookup: ModelInfoLookup | None = None,
+        free_pool=None,
     ) -> None:
         self._settings = settings
+        self._free_pool = free_pool
         self._model_router = model_router or ModelRouter(settings)
         self._provider_executor = provider_executor or ProviderExecutor(
             provider_resolver,
@@ -101,6 +103,31 @@ class MessagesHandler:
         request_id = request_id or new_request_id()
         try:
             require_non_empty_messages(request_data.messages)
+            if self._settings.auto_free_models and self._free_pool is not None:
+                # Discard all caller-supplied routing/billing extensions before discovery.
+                values = request_data.model_dump(
+                    include=set(type(request_data).model_fields)
+                )
+                values["extra_body"] = None
+                values["max_tokens"] = min(values.get("max_tokens") or 8192, 8192)
+                request_data = MessagesRequest.model_validate(values)
+                provisional = self._apply_message_routing_policies(
+                    self._model_router.resolve_messages_request(request_data)
+                )
+                optimized = self._intercept_local_optimization(provisional)
+                if optimized is not None:
+                    return await self._to_public_response(
+                        optimized, stream=request_data.stream, request_id=request_id
+                    )
+                models = await self._free_pool.select(
+                    self._settings, request_data.model_dump()
+                )
+                self._model_router = ModelRouter(
+                    self._settings, free_targets=tuple(m.ref for m in models)
+                )
+                self._provider_executor.configure_free_routing(
+                    self._free_pool, self._settings, models
+                )
             routed = self._model_router.resolve_messages_request(request_data)
             routed = self._apply_message_routing_policies(routed)
             tool_body = self._web_tools.try_stream_messages(

@@ -43,8 +43,10 @@ class ResponsesHandler:
         provider_executor: ProviderExecutor | None = None,
         generation_id: int | None = None,
         request_headers: Mapping[str, str] | None = None,
+        free_pool=None,
     ) -> None:
         self._settings = settings
+        self._free_pool = free_pool
         self._model_router = model_router or ModelRouter(settings)
         self._provider_executor = provider_executor or ProviderExecutor(
             provider_resolver,
@@ -74,6 +76,23 @@ class ResponsesHandler:
             raise InvalidRequestError("Responses request input must not be empty.")
 
         try:
+            if self._settings.auto_free_models and self._free_pool is not None:
+                values = request_data.model_dump(
+                    include=set(type(request_data).model_fields)
+                )
+                values["max_output_tokens"] = min(
+                    values.get("max_output_tokens") or 8192, 8192
+                )
+                request_data = OpenAIResponsesRequest.model_validate(values)
+                models = await self._free_pool.select(
+                    self._settings, request_data.model_dump()
+                )
+                self._model_router = ModelRouter(
+                    self._settings, free_targets=tuple(m.ref for m in models)
+                )
+                self._provider_executor.configure_free_routing(
+                    self._free_pool, self._settings, models
+                )
             routed = self._model_router.resolve_responses_request(request_data)
             streamed = self._provider_executor.stream_responses(
                 routed,

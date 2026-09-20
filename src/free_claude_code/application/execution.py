@@ -18,6 +18,7 @@ from free_claude_code.core.anthropic import (
     get_token_count,
 )
 from free_claude_code.core.failures import ExecutionFailure, FailureKind
+from free_claude_code.core.free_stream import FreeStreamCheck
 from free_claude_code.core.openai_responses import (
     OpenAIResponsesRequest,
     estimate_responses_input_tokens,
@@ -29,6 +30,7 @@ from free_claude_code.core.trace import (
     traced_async_stream,
 )
 
+from .errors import ApplicationError
 from .ports import ModelInfoLookup, ProviderResolver
 from .routing import (
     ProviderModelTarget,
@@ -73,6 +75,14 @@ class ProviderExecutor:
         self._log_raw_payloads = log_raw_payloads
         self._request_headers = MappingProxyType(dict(request_headers or {}))
         self._progress_timeout_seconds = float(progress_timeout_seconds)
+        self._free_pool = None
+        self._free_settings = None
+        self._free_models = {}
+
+    def configure_free_routing(self, pool, settings, models):
+        self._free_pool = pool
+        self._free_settings = settings
+        self._free_models = {model.ref: model for model in models}
 
     def _progress_timeout_failure(
         self,
@@ -191,6 +201,13 @@ class ProviderExecutor:
                     deep=True,
                 )
             )
+            free_model = self._free_models.get(target.provider_model_ref)
+            if free_model is not None:
+                request.max_tokens = min(
+                    request.max_tokens or 8192, free_model.output_limit or 8192, 8192
+                )
+                if target.provider_id == "gemini":
+                    request.model = request.model.removeprefix("models/")
             return provider.stream_messages(
                 request,
                 input_tokens=input_tokens,
@@ -241,6 +258,15 @@ class ProviderExecutor:
                     deep=True,
                 )
             )
+            free_model = self._free_models.get(target.provider_model_ref)
+            if free_model is not None:
+                request.max_output_tokens = min(
+                    request.max_output_tokens or 8192,
+                    free_model.output_limit or 8192,
+                    8192,
+                )
+                if target.provider_id == "gemini":
+                    request.model = request.model.removeprefix("models/")
             return provider.stream_responses(
                 request,
                 input_tokens=input_tokens,
@@ -337,7 +363,22 @@ class ProviderExecutor:
         async def provider_body() -> AsyncIterator[str]:
             loop = asyncio.get_running_loop()
             progress_deadline = loop.time() + self._progress_timeout_seconds
+            last_failure = None
             for index, target in enumerate(candidates):
+                free_model = self._free_models.get(target.provider_model_ref)
+                if free_model is not None and self._free_pool.cooldown(
+                    self._free_settings, free_model
+                ):
+                    continue
+                if self._free_pool is not None:
+                    progress_deadline = loop.time() + min(
+                        self._progress_timeout_seconds, 45
+                    )
+                stream_check = (
+                    FreeStreamCheck(target.provider_id)
+                    if free_model is not None
+                    else None
+                )
                 provider_stream: AsyncIterator[str] | None = None
                 candidate_committed = False
                 candidate_failure: ExecutionFailure | None = None
@@ -347,6 +388,12 @@ class ProviderExecutor:
                         provider_stream = await open_candidate(index, target)
                     except ExecutionFailure as failure:
                         candidate_failure = failure
+                    except ApplicationError as error:
+                        if self._free_pool is None:
+                            raise
+                        candidate_failure = ExecutionFailure(
+                            FailureKind.UNAVAILABLE, 503, error.message, False
+                        )
                     finally:
                         # Initialization has its own request budget. Upstream progress
                         # time is not spent waiting for a provider's startup task.
@@ -371,6 +418,15 @@ class ProviderExecutor:
                                 except ExecutionFailure as failure:
                                     read_failure = failure
                         except StopAsyncIteration:
+                            if free_model is not None and (
+                                not candidate_committed or not stream_check.complete
+                            ):
+                                candidate_failure = ExecutionFailure(
+                                    FailureKind.UPSTREAM,
+                                    502,
+                                    "Free provider ended without a complete response.",
+                                    False,
+                                )
                             break
                         except TimeoutError as exc:
                             if not progress_timeout.expired():
@@ -390,6 +446,8 @@ class ProviderExecutor:
                         if not chunk:
                             await asyncio.sleep(0)
                             continue
+                        if stream_check is not None:
+                            stream_check.feed(chunk)
                         if not candidate_committed:
                             candidate_committed = True
                             if index > 0:
@@ -402,12 +460,28 @@ class ProviderExecutor:
                                 )
                         yield chunk
                         progress_deadline = loop.time() + self._progress_timeout_seconds
+                except ExecutionFailure as failure:
+                    if self._free_pool is None:
+                        raise
+                    candidate_failure = failure
+                except ApplicationError as error:
+                    if self._free_pool is None:
+                        raise
+                    candidate_failure = ExecutionFailure(
+                        error.kind, error.status_code, error.message, False
+                    )
                 finally:
                     if provider_stream is not None:
                         active_error = sys.exception()
                         preserved_error = active_error or candidate_failure
                         cleanup_timeout = asyncio.timeout_at(
-                            progress_deadline if active_error is None else None
+                            (
+                                loop.time() + 5
+                                if self._free_pool is not None
+                                else progress_deadline
+                            )
+                            if active_error is None
+                            else None
                         )
                         try:
                             async with cleanup_timeout:
@@ -426,7 +500,14 @@ class ProviderExecutor:
                             ) from exc
 
                 if candidate_failure is None:
+                    if free_model is not None:
+                        self._free_pool.record_success(free_model)
                     return
+                if free_model is not None:
+                    self._free_pool.record_failure(
+                        self._free_settings, free_model, candidate_failure
+                    )
+                last_failure = candidate_failure
                 if candidate_committed or index + 1 >= len(candidates):
                     raise candidate_failure
                 next_target = candidates[index + 1]
@@ -438,6 +519,17 @@ class ProviderExecutor:
                     failure=candidate_failure,
                     candidate_index=index + 2,
                     candidate_count=len(candidates),
+                )
+
+            # Candidates may have entered a provider-wide cooldown during this turn.
+            if self._free_pool is not None:
+                if last_failure is not None:
+                    raise last_failure
+                raise ExecutionFailure(
+                    FailureKind.UNAVAILABLE,
+                    503,
+                    "Every eligible free fallback failed or is cooling down. Resume the saved session after capacity returns; see Admin > Automatic free routing.",
+                    False,
                 )
 
         stream_trace: dict[str, object] = {

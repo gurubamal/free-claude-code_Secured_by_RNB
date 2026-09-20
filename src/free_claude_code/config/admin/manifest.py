@@ -86,6 +86,14 @@ SECTIONS: tuple[ConfigSectionSpec, ...] = (
 
 _NON_PROVIDER_FIELDS: tuple[ConfigFieldSpec, ...] = (
     ConfigFieldSpec(
+        "AUTO_FREE_MODELS",
+        "Automatic free routing",
+        "models",
+        "boolean",
+        settings_attr="auto_free_models",
+        description="Automatically select eligible free models and independent provider fallbacks. Overrides manual model and fallback selections. See Automatic free routing for readiness.",
+    ),
+    ConfigFieldSpec(
         "MODEL",
         "Default Model",
         "models",

@@ -73,15 +73,19 @@ class RoutedTokenCountRequest:
 class ModelRouter:
     """Resolve incoming Claude model names to configured provider/model pairs."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, *, free_targets: tuple[str, ...] = ()):
         self._settings = settings
+        self._free_targets = free_targets
 
     def resolve(self, claude_model_name: str) -> ResolvedModelRoute:
         if self._settings.auto_free_models:
+            targets = tuple(self._target_from_ref(ref) for ref in self._free_targets)
             return ResolvedModelRoute(
                 original_model=claude_model_name,
-                primary=self._target("open_router", "openrouter/free"),
-                fallbacks=(),
+                primary=targets[0]
+                if targets
+                else self._target("open_router", "openrouter/free"),
+                fallbacks=targets[1:],
                 reasoning_preference=self._settings.reasoning_policy,
             )
         (

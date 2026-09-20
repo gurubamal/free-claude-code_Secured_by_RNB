@@ -25,6 +25,7 @@ from free_claude_code.core.reasoning import ReasoningControl, ReasoningEffort
 )
 def test_retired_direct_ids_route_to_default_before_family_aliases(prefix, off, suffix):
     settings = Settings(
+        auto_free_models=False,
         MODEL="groq/default",
         MODEL_OPUS="deepseek/opus",
         MODEL_SONNET="deepseek/sonnet",
@@ -63,7 +64,9 @@ def test_retired_direct_ids_route_to_default_before_family_aliases(prefix, off, 
 
 @pytest.fixture
 def settings():
-    settings = Settings()
+    settings = Settings(
+        auto_free_models=False,
+    )
     settings.model = "nvidia_nim/fallback-model"
     settings.model_fable = None
     settings.model_opus = None
