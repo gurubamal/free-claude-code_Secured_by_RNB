@@ -1,0 +1,12 @@
+{
+  "passed": [
+    "production server startup",
+    "authenticated Anthropic-to-OpenAI synthetic provider roundtrip",
+    "Chrome first login, mandatory change and full Admin render",
+    "Chrome existing password change and sign-out",
+    "local reset revokes browser session and preserves provider config",
+    "configuration restart on a new port preserves credentials and permits sign-in"
+  ],
+  "live_provider_used": false,
+  "real_credentials_used": false
+}

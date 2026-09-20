@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FCC Hardened — Sign in</title>
+<style>
+body{font:16px system-ui;background:#111820;color:#e9f1f7;margin:0;min-height:100vh;display:grid;place-items:center}
+main{width:min(380px,85vw);padding:32px;background:#1b2733;border-radius:16px}
+label{display:block;margin:18px 0 6px}input,button{box-sizing:border-box;width:100%;padding:12px;border-radius:7px;font:inherit}
+input{background:#101820;color:white;border:1px solid #607080}button{margin-top:22px;border:0;background:#8de1be;color:#102219;cursor:pointer}
+p{line-height:1.6;color:#bdcbd6}#status{min-height:1.6em;color:#ffd7a4}code{overflow-wrap:anywhere}
+</style></head><body><main>
+<h1>FCC Hardened</h1><p>Your local coding workspace.</p>
+<form id="login">
+<label for="username">Username</label><input id="username" value="admin" autocomplete="username" required>
+<label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required maxlength="1024">
+<button>Sign in</button></form>
+<form id="change" hidden>
+<p>Set your own password before continuing. You can also change an existing password here.</p>
+<label for="current">Current password</label><input id="current" type="password" autocomplete="current-password" required>
+<label for="newPassword">New password</label><input id="newPassword" type="password" autocomplete="new-password" minlength="14" maxlength="1024" required>
+<label for="confirm">Confirm new password</label><input id="confirm" type="password" autocomplete="new-password" required>
+<button>Change password and sign out</button></form>
+<button id="toggle" type="button">Change password</button>
+<p id="status" role="status"></p>
+<p>First launch: use the temporary password shown in the server terminal, or run <code>.\Run-Hardened.ps1 show-initial-password</code> locally. Forgotten password? Run <code>.\Run-Hardened.ps1 reset-password</code> on the same Windows account. Provider keys are preserved.</p>
+</main><script>
+const $=id=>document.getElementById(id);
+let wantChange = new URLSearchParams(location.search).has("change");
+if(wantChange) $("status").textContent="Sign in to change your password.";
+async function post(path,body){const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json","X-FCC-Admin":"1"},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw Error(d.detail||"Request failed");return d;}
+function change(){ $("login").hidden=true;$("change").hidden=false;$("toggle").hidden=true; }
+$("toggle").onclick=()=>{wantChange=true;$("status").textContent="Sign in above to change your password.";$("password").focus();};
+$("login").onsubmit=async e=>{e.preventDefault();$("status").textContent="Signing in…";try{const d=await post("/admin/auth/login",{username:$("username").value,password:$("password").value});if(d.password_change_required||wantChange){$("current").value=$("password").value;$("password").value="";change();$("status").textContent="Choose a password with at least 14 characters and 8 distinct characters.";}else location.assign("/admin");}catch(x){$("status").textContent=x.message;}};
+$("change").onsubmit=async e=>{e.preventDefault();try{if($("newPassword").value!==$("confirm").value)throw Error("Passwords do not match");await post("/admin/auth/password",{current_password:$("current").value,new_password:$("newPassword").value});location.assign("/admin/login");}catch(x){$("status").textContent=x.message;}};
+</script></body></html>
