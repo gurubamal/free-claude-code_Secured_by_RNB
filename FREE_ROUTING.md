@@ -15,6 +15,8 @@ Acknowledgments bind to the credential fingerprint; changing the key requires a 
 
 These are discovery integrations, not a claim that all providers are configured, quota-available or have a qualifying model today.
 
+Providers outside the table, including **OpenAI / ChatGPT**, support account/catalog checks but cannot generate through automatic free routing. The Admin card shows this distinction even when model discovery succeeds. OpenAI's ChatGPT sign-in and API-key billing are separate authentication paths; see [OpenAI authentication](https://learn.chatgpt.com/docs/auth). This fork does not infer free eligibility from a successful sign-in or a model name. No OpenAI plan or account allowance was validated for this pool.
+
 | Provider | Admission basis | Primary reference |
 | --- | --- | --- |
 | OpenRouter | All published token prices and surcharges zero; additional request-level zero-price ceilings | [Limits](https://openrouter.ai/docs/api/reference/limits), [model catalog](https://openrouter.ai/api/v1/models) |

@@ -256,19 +256,19 @@ def prepare_provider(
 
     def construct(settings: Settings) -> BaseProvider:
         config = build_provider_config(descriptor, settings)
+        discovery_only = False
         if settings.auto_free_models:
             from free_claude_code.application.free_pool import local_base
             from free_claude_code.config.free_providers import POLICY_BY_ID
 
             policy = POLICY_BY_ID.get(provider_id)
-            if policy is None:
-                raise ApplicationUnavailableError(
-                    "Provider is outside the automatic free policy"
-                )
+            discovery_only = policy is None
             base = (
                 local_base(settings, provider_id)
-                if policy.mode == "local"
+                if policy is not None and policy.mode == "local"
                 else descriptor.default_base_url
+                if policy is not None
+                else config.base_url
             )
             config = replace(
                 config,
@@ -290,6 +290,10 @@ def prepare_provider(
         )
         if settings.auto_free_models and provider_id == "open_router":
             provider._behavior.free_only = True
+        if discovery_only:
+            from .discovery_only import DiscoveryOnlyProvider
+
+            return DiscoveryOnlyProvider(config, provider)
         return provider
 
     return construct

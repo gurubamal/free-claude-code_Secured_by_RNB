@@ -251,6 +251,33 @@ def main():
                 checks.append(
                     "Chrome first login, mandatory change and full Admin render"
                 )
+                page.evaluate("""() => {
+                    state.config.automatic_free_models = true;
+                    state.authStatuses.set('openai', {state: 'connected', connected: true});
+                    state.startup = {startup: {providers: {openai: 'ready'}},
+                        cached_models: {openai: ['synthetic-catalog-model']}};
+                    state.providerChecks.delete('openai');
+                    updateProviderCard(state.config.provider_status.find(
+                        provider => provider.provider_id === 'openai'));
+                }""")
+                openai_card = page.locator('[data-provider="openai"]')
+                assert openai_card.locator(".provider-meta").first.inner_text() == (
+                    "1 model available"
+                )
+                policy_note = openai_card.locator('[data-free-policy-note="openai"]')
+                assert policy_note.is_visible()
+                assert (
+                    "not included in automatic free routing" in policy_note.inner_text()
+                )
+                openai_card.screenshot(path=str(output / "openai-discovery.png"))
+                assert not failures, failures
+                checks.append(
+                    "Chrome connected OpenAI catalog count and separate free-policy exclusion (synthetic state)"
+                )
+                page.reload()
+                page.locator("#providerGroups .provider-strip").first.wait_for(
+                    timeout=20000
+                )
                 free_status = {
                     "automatic": True,
                     "minimum_context_tokens": 512000,

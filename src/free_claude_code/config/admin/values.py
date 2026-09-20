@@ -2,6 +2,7 @@
 
 from enum import Enum
 
+from free_claude_code.config.free_providers import POLICY_BY_ID
 from free_claude_code.config.loader import ConfigSource, ManagedConfigSnapshot
 from free_claude_code.core.json_types import JsonObject
 
@@ -99,7 +100,13 @@ def load_config_response(snapshot: ManagedConfigSnapshot) -> JsonObject:
             }
         )
 
+    providers = provider_config_status(state)
+    for provider in providers:
+        provider["automatic_free_policy_supported"] = (
+            provider["provider_id"] in POLICY_BY_ID
+        )
     return {
+        "automatic_free_models": snapshot.settings.auto_free_models,
         "sections": [
             {
                 "id": section.section_id,
@@ -111,5 +118,5 @@ def load_config_response(snapshot: ManagedConfigSnapshot) -> JsonObject:
         ],
         "fields": fields,
         "paths": {"managed": str(snapshot.path)},
-        "provider_status": provider_config_status(state),
+        "provider_status": providers,
     }

@@ -61,3 +61,17 @@ After adding recognition of Mistral's primary `max_context_length` and `function
 At **2026-09-20 07:55 UTC**, after restart, authenticated live status returned HTTP 200, a 512,000-token floor, five catalog-eligible models and zero outside cooldown. OpenRouter's reason was `daily_quota_exhausted` from the new read-only preflight. The displayed five-minute retry check does not claim that quota will reset then. No additional inference request was needed for this verification.
 
 The final targeted security + free-pool rerun passed **78 tests** after the Claude-window alignment. Ruff passed on every changed/new Python file, Git whitespace checks passed, and staged files passed an in-memory scan for the managed provider/proxy credentials and common token patterns. These scans are bounded checks, not proof of an absence of all secrets or vulnerabilities.
+
+## Connected-account model discovery fix — 2026-09-20
+
+The automatic-pool update incorrectly rejected OpenAI provider construction before a read-only catalog request. The local daemon recorded `Provider is outside the automatic free policy` at 13:37:54 IST, while Admin showed a generic settings error. Providers outside the automatic free policy now receive a discovery-only wrapper: catalog listing and cleanup delegate to the provider, while both generation methods reject the request. Manual mode retains its existing provider behavior. OpenAI has not been added to the automatic free pool.
+
+The following scoped regression run passed **149 tests** in 47.08 seconds:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest security_tests tests/providers/test_openai_codex_provider.py tests/config/test_admin_status.py -n 0 -q --tb=short
+```
+
+New cases verify that OpenAI catalog calls reach the underlying provider, generation calls do not, cleanup delegates, manual mode is unchanged, and Admin distinguishes free-policy support. The production-server smoke in installed Chrome passed **eight checks**, including a connected OpenAI card with a synthetic catalog count and a separate free-policy exclusion. See [browser-smoke.json](security-validation/browser-smoke.json) and [the synthetic OpenAI card](security-validation/openai-discovery.png). These browser fixtures do not authenticate to OpenAI. Ruff and Git whitespace checks passed; dependencies did not change.
+
+After restarting the local daemon, a read-only check at **2026-09-20 08:18:51 UTC** found no saved ChatGPT credentials and reported `disconnected`. A live OpenAI catalog request could therefore not be verified in this check. Authenticated free-routing status returned HTTP 200 at 08:18:55 UTC: automatic routing enabled, a 512,000-token floor, five catalog-eligible models, and zero available outside cooldown; OpenRouter still reported daily quota exhaustion. No inference was attempted for this fix. A reconnect and successful live catalog response remain necessary to validate this user's OpenAI connection.

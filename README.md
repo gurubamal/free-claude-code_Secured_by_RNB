@@ -46,6 +46,8 @@ Add your provider API keys in **Admin → Providers**, save them, then open **Au
 
 The status page distinguishes missing keys, missing acknowledgments, catalog failures, eligible models and cooldowns. It displays each eligible model’s context limit. Every selected model and fallback must have **at least 512,000 context tokens**, known tool support, eligible free access and enough estimated room for the actual request. Unknown or smaller context windows are excluded. See [FREE_ROUTING.md](FREE_ROUTING.md) for the provider policies and limits.
 
+Connected-account catalogs are separate from automatic free eligibility. **OpenAI / ChatGPT** can connect and discover models, but it is not included in this fork's automatic free pool. Its provider card states this limitation. Connecting it does not add free fallback capacity or resolve another provider's exhausted quota.
+
 ## Claude Code
 
 From any project, run the launcher by its path:

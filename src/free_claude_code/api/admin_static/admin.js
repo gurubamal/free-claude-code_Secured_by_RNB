@@ -381,6 +381,13 @@ function updateProviderCard(provider) {
     actions.appendChild(settings);
   }
   card.replaceChildren(title, meta, result, actions);
+  if (state.config.automatic_free_models && provider.automatic_free_policy_supported === false) {
+    const policyNote = document.createElement("span");
+    policyNote.className = "provider-meta";
+    policyNote.dataset.freePolicyNote = provider.provider_id;
+    policyNote.textContent = "Catalog discovery only. This provider is not included in automatic free routing; connecting it does not add free fallback capacity.";
+    card.insertBefore(policyNote, actions);
+  }
   const next = [...grid.children].find((other) => other !== card &&
     connectedAccountName(provider).localeCompare(providerDisplayName(other.dataset.provider), "en", { sensitivity: "base" }) < 0);
   if (card.parentElement !== grid || card.nextElementSibling !== (next || null)) grid.insertBefore(card, next || null);
