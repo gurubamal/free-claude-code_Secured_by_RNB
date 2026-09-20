@@ -22,6 +22,8 @@ The screenshot's **378 models available** is the OpenRouter provider catalog cou
 
 Scroll through the cloud providers to find the service whose credentials you want to configure. A visible card means a configuration interface exists; it does not mean that provider is configured, included in the automatic free pool, or currently offers a qualifying model.
 
+**Atria** and **Inception** now have their own **Configure** cards and masked API-key fields. Get an Atria key from [its console](https://api.atria-asi.ai/console), or an Inception key from [its platform](https://platform.inceptionlabs.ai/). Save it in Admin and keep repository files free of credentials. Both integrations require the paid-API switch for routing consideration. As reviewed on 2026-09-20, Atria Dawn Preview has 256k context and Inception Mercury 2.5 has 260k, so neither meets your 512k minimum. Their settings explain that exclusion; a saved key or loaded catalog does not make them selectable. Inception's public catalog is not an authentication check, and key saving does not send a billable test request.
+
 For account-dependent free tiers, save the key, then open **Routing controls** in the sidebar. Confirm that the key belongs to a free account with paid billing disabled. The confirmation binds to that key and must be repeated after a key change. The app relies on this statement for account billing. Without it, these keys are used only as paid access when enabled.
 
 ## 3. Remaining cloud providers and local servers
@@ -49,3 +51,13 @@ This fourth image is a **synthetic browser test**, distinct from the three suppl
 Routing can have no available candidates even after a successful connection and catalog load. Eligibility is a catalog/account assessment, not proof of inference. If every eligible route is unavailable, the gateway returns an error and retains the selected billing policy and 512k minimum.
 
 See [Automatic routing](../FREE_ROUTING.md) for provider and interface limits, [HARDENING.md](../HARDENING.md) for storage/access controls, and [VALIDATION.md](../VALIDATION.md) for dated checks.
+
+## Gemini catalog access errors
+
+Gemini API-key discovery uses Google's native model endpoint, with header authentication and bounded pagination. The provider card and Routing controls display recognized Google error codes with fixed instructions; raw upstream messages, credentials and project identifiers are not returned to the page.
+
+- **CONSUMER_SUSPENDED:** Google has suspended the Cloud project associated with the key. Review the project's notification, resolve the stated issue and use Google's appeal/support process. A replacement key on the same project does not lift the suspension. [Google recovery guidance](https://docs.cloud.google.com/resource-manager/docs/project-suspension-guidelines).
+- **SERVICE_DISABLED:** enable the Generative Language API for the intended project in Google Cloud.
+- **API_KEY_INVALID:** replace the key using the protected Gemini **Edit** form with a valid Gemini API key from Google AI Studio.
+
+After resolving access, refresh catalogs. Eligible alternatives remain available to automatic routing while Gemini is excluded. A failure does not enable paid billing or waive the 512k minimum. Google consumer Pro/Ultra access and Gemini Developer API project access remain separate.

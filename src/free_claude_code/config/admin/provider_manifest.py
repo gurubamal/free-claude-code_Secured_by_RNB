@@ -18,6 +18,21 @@ class ProviderFieldOverride(TypedDict, total=False):
 
 
 _PROVIDER_FIELD_OVERRIDES: dict[str, ProviderFieldOverride] = {
+    "ATRIA_API_KEY": {
+        "description": (
+            "Atria ASI API key from api.atria-asi.ai/console. Paid-route opt-in is "
+            "required because free billing is not established. Dawn Preview has "
+            "256k context and is excluded by the 512k routing minimum."
+        ),
+    },
+    "INCEPTION_API_KEY": {
+        "description": (
+            "Inception Labs API key from platform.inceptionlabs.ai. Requires "
+            "paid-route opt-in; trial credits do not establish free capacity. "
+            "Mercury 2.5 has 260k context, below the 512k routing minimum. "
+            "Its public model catalog does not verify your key."
+        ),
+    },
     "OPENAI_PROXY": {
         "description": (
             "Optional proxy used for OpenAI sign-in and ChatGPT Codex requests. "

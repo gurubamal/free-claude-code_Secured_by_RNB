@@ -22,6 +22,7 @@ This repository builds on an existing MIT-licensed project; the upstream source 
 | Automatic routing | Free by default; opt-in subscriptions and paid APIs, configurable category/provider order, persistent cooldowns and a strict 512k+ floor |
 | Route visibility | Actual provider/model, billing category, latest attempt and last completed success in the web controls |
 | Google account login | Gemini API browser OAuth with PKCE, private token storage, automatic refresh and disconnect; requires your own Google Cloud project and Desktop OAuth client |
+| Additional provider cards | Atria and Inception API-key configuration, live model discovery and Chat adapters; their current 256k/260k models remain below the required 512k routing minimum |
 | Claude launcher | Automatic proxy startup, inherited credential-environment filtering, normal permission prompts, and inherited hooks/MCP disabled |
 | Remote messaging | Disabled by default; explicit sender/channel checks and restricted managed Claude tools |
 | Dependencies | Locked installation, pinned build tools and security minimums for packages flagged by the dated audit |
@@ -67,7 +68,11 @@ Every selected model and fallback must have **at least 512,000 context tokens**,
 
 The **Actual gateway route** panel shows the last successful provider/model and latest attempt, billing category, context and timestamps. It refreshes every ten seconds while visible; records reset on server restart. These are gateway records across clients. A CLI header or a model's self-description may repeat the fixed client alias and does not establish the actual route.
 
+Gemini API-key discovery uses Google's native, paginated model catalog. Known Google access failures now show a specific explanation in the provider card and routing controls without exposing the upstream key or project ID. `CONSUMER_SUSPENDED` requires resolving the Google Cloud project suspension; retrying the gateway cannot restore access. See [Google's recovery guidance](https://docs.cloud.google.com/resource-manager/docs/project-suspension-guidelines).
+
 ## Switch provider or model
+
+**Atria** (`ATRIA_API_KEY`) and **Inception** (`INCEPTION_API_KEY`) appear under Admin → Providers. Save keys there, not in repository files. Both require **Allow paid API routes** because connecting a key or receiving trial credits does not establish zero-cost access. This permission does not waive the context minimum: on 2026-09-20, [Atria Dawn Preview](https://api.atria-asi.ai/docs) documents 256,000 tokens and [Inception Mercury 2.5](https://docs.inceptionlabs.ai/get-started/models) documents 260,000. They can appear in provider catalogs but are excluded from automatic and selected routing until a qualifying model is available. Inception's public catalog does not verify a saved key.
 
 In **[Routing controls](http://127.0.0.1:8082/admin/free) → Choose provider and model**, choose **Free models**, a provider and an exact model (or the provider's best eligible model), then **Use as first preference**. **Return to automatic selection** removes that preference. Enabled subscription/paid categories can also be selected explicitly.
 

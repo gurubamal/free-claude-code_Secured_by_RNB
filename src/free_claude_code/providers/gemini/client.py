@@ -1,8 +1,13 @@
 """Google AI Studio Gemini provider (OpenAI-compatible chat completions)."""
 
+import asyncio
+
+import httpx
+
 from free_claude_code.core.anthropic import ReasoningReplayMode
 from free_claude_code.providers.admission import ProviderAdmissionController
 from free_claude_code.providers.base import ProviderConfig
+from free_claude_code.providers.gemini.catalog import read_native_catalog
 from free_claude_code.providers.google_openai import (
     GeminiReasoningEncoder,
     GoogleOpenAIProvider,
@@ -48,3 +53,18 @@ class GeminiProvider(GoogleOpenAIProvider):
             api_key_provider=api_key_provider,
             default_headers=default_headers,
         )
+        self._catalog_proxy = config.proxy
+
+    async def list_model_infos(self):
+        # Google's native catalog supplies context limits and works independently
+        # of the optional OpenAI-compatible /models endpoint.
+        async with (
+            asyncio.timeout(25),
+            httpx.AsyncClient(
+                timeout=15,
+                trust_env=False,
+                follow_redirects=False,
+                proxy=self._catalog_proxy,
+            ) as client,
+        ):
+            return await read_native_catalog(client, {"x-goog-api-key": self._api_key})

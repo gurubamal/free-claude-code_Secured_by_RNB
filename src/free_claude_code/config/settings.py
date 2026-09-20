@@ -269,6 +269,12 @@ class Settings(BaseModel):
     kimchi_api_key: OptionalNonEmptyString = Field(
         default=None, validation_alias="KIMCHI_API_KEY"
     )
+    atria_api_key: OptionalNonEmptyString = Field(
+        default=None, validation_alias="ATRIA_API_KEY"
+    )
+    inception_api_key: OptionalNonEmptyString = Field(
+        default=None, validation_alias="INCEPTION_API_KEY"
+    )
 
     # ==================== xAI / Grok (OpenAI-compatible) ====================
     xai_api_key: OptionalNonEmptyString = Field(

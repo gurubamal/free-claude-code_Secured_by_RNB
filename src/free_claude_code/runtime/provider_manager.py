@@ -17,6 +17,7 @@ from free_claude_code.application.ports import ModelCatalogPort, ModelCatalogSna
 from free_claude_code.application.readiness import InitializationWait
 from free_claude_code.config.settings import Settings
 from free_claude_code.core.async_tasks import run_sync_owned
+from free_claude_code.core.google_errors import GoogleAccessError
 from free_claude_code.core.json_types import JsonObject
 from free_claude_code.core.token_estimation import initialize_token_estimation
 from free_claude_code.core.trace import trace_event
@@ -62,6 +63,7 @@ class _ProviderGeneration:
     initial_complete: bool = False
     refresh_task: asyncio.Task[ProviderModelRefreshResult] | None = None
     file_state: str = "starting"
+    provider_errors: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.drained.set()
@@ -259,12 +261,15 @@ class ProviderRuntimeManager:
     async def _discover_provider(
         self, generation: _ProviderGeneration, provider_id: str
     ) -> ProviderModelRefreshResult:
+        generation.provider_errors.pop(provider_id, None)
         try:
             provider = await generation.runtime.resolve_provider(provider_id)
             infos = await provider.list_model_infos()
         except asyncio.CancelledError:
             raise
         except Exception as exc:
+            if isinstance(exc, GoogleAccessError):
+                generation.provider_errors[provider_id] = exc.message
             logger.warning(
                 "Provider model discovery skipped: provider={} reason={}",
                 provider_id,
@@ -452,6 +457,7 @@ class ProviderRuntimeManager:
             "catalog": "ready" if generation.initial_complete else "starting",
             "catalog_file": generation.file_state,
             "providers": providers,
+            "provider_errors": dict(generation.provider_errors),
         }
 
     async def connected_provider_changed(

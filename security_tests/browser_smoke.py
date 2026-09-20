@@ -270,6 +270,35 @@ def main():
                 checks.append(
                     "Chrome first login, mandatory change and full Admin render"
                 )
+                for provider_id, env_key in (
+                    ("atria", "ATRIA_API_KEY"),
+                    ("inception", "INCEPTION_API_KEY"),
+                ):
+                    card = page.locator(f'[data-provider="{provider_id}"]')
+                    card.get_by_role("button", name="Configure", exact=True).click()
+                    assert (
+                        page.locator(f"#field-{env_key}").get_attribute("type")
+                        == "password"
+                    )
+                    assert "512k" in page.locator("#providerDialog").inner_text()
+                    page.locator("#cancelProviderDialog").click()
+                checks.append(
+                    "Chrome Atria and Inception cards, masked keys and context-limit notes"
+                )
+                page.evaluate("""() => {
+                    state.startup = {startup: {providers: {gemini: 'failed'},
+                        provider_errors: {gemini: 'Google project suspended (CONSUMER_SUSPENDED). Review Google Cloud.'}}};
+                    renderProviderCheckResult('gemini');
+                }""")
+                assert (
+                    "CONSUMER_SUSPENDED"
+                    in page.locator(
+                        '[data-provider="gemini"] .provider-check-result'
+                    ).inner_text()
+                )
+                checks.append(
+                    "Chrome safe Google suspension diagnostic on provider card (synthetic state)"
+                )
                 google_card = page.locator('[data-provider="gemini_oauth"]')
                 google_card.get_by_role("button", name="Sign in with Google").wait_for()
                 assert google_card.get_by_role(

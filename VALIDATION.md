@@ -2,6 +2,20 @@
 
 Release: `6.2.46+rnb.1`, Windows, Python 3.14.0.
 
+## Atria, Inception and Gemini catalog diagnostics — 2026-09-20
+
+Added Atria and Inception cards, masked managed API-key fields, fixed official endpoints and OpenAI-compatible Chat adapters. Paid-route permission is required; their current documented 256k/260k models do not pass the 512k floor. Inception uses its chat-only catalog and standard SSE; its publicly readable catalog is not treated as credential verification. Atria documentation supplements only an exact live model ID. Neither integration was tested with a real provider key or authenticated generation.
+
+Gemini API-key discovery now uses Google's native catalog with header authentication, a 25-second overall deadline, 20-page limit and 4 MiB page limit. Recognized Google ErrorInfo codes produce fixed actionable messages in provider cards, routing controls and key checks; account IDs and raw upstream error messages are excluded. Failed discovery excludes that provider without bypassing the other routing checks. Resolving a suspended Google project remains an account-owner/Google action.
+
+**309 scoped tests passed in 60.46 seconds**:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q -n 4 security_tests tests/contracts/test_provider_catalog_order.py tests/contracts/test_admin_provider_manifest.py tests/config/test_provider_catalog.py tests/config/test_admin_status.py tests/providers/test_model_token_limit_profiles.py tests/providers/test_credential_validation.py tests/providers/test_gemini.py --tb=short --show-capture=no
+```
+
+Checks cover real adapter serialization/stream conversion with synthetic HTTP, endpoint and Bearer/header handling, current-model context exclusion, future eligible catalog admission, disabled paid routing, unverified credentials, native Gemini pagination and context, suspension propagation, redaction, and clearing stale errors after recovery. **All 11 installed-Chrome smoke checks passed**, including both new masked provider forms and a synthetic Google suspension message. Browser screenshots and results contain synthetic state only. Formatting and Ruff checks passed; the historical upstream-suite limitations below remain separate.
+
 ## CLI and web route selection — 2026-09-20
 
 Added `Run-Hardened.ps1 route list/status/use/auto` and web provider/model selectors. A manual choice is a first preference; automatic fallback always stays enabled. Selection cannot enable billing, override exclusions, waive 512k/tool/request-fit checks or manufacture a catalog entry. It persists for new requests across gateway clients. Returning to automatic selection removes the preference.

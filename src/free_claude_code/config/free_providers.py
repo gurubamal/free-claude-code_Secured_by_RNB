@@ -77,6 +77,14 @@ FREE_PROVIDERS = (
     ),
 )
 PAID_PROVIDERS = (
+    # A key or trial allowance does not establish zero-price access.
+    FreeProviderPolicy("atria", "paid_api", "atria", "https://api.atria-asi.ai/docs"),
+    FreeProviderPolicy(
+        "inception",
+        "paid_api",
+        "inception",
+        "https://docs.inceptionlabs.ai/get-started/models",
+    ),
     FreeProviderPolicy(
         "gemini_oauth",
         "paid_api",

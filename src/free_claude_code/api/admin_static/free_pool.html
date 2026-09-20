@@ -79,6 +79,7 @@ function render(data){
   if(p.retry_at)state.append(node('small','Retry check: '+new Date(p.retry_at).toLocaleString()));
   if(p.cooldown_reasons?.length)state.append(node('small',p.cooldown_reasons.map(x=>x.replaceAll('_',' ')).join('; ')));
   if(p.http_status)state.append(node('small','HTTP '+p.http_status));
+  if(p.message)state.append(node('small',p.message));
   if(p.coverage==='PARTIAL')state.append(node('small','Partial catalog coverage'));
   if(p.below_context_minimum)state.append(node('small',p.below_context_minimum+' catalog models have default context below 512,000. Experimental maxima are not used.'));
   if((p.model_ids||[]).length){const d=node('details','');d.append(node('summary','Show models'),node('p',(p.model_details||p.model_ids.map(id=>({id}))).map(m=>m.id+(m.context_tokens?' — '+m.context_tokens.toLocaleString()+' context tokens':'')+(m.billing?' · '+m.billing.replace('_',' '):'')).join('; ')));models.append(d)}

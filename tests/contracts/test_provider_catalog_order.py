@@ -6,6 +6,8 @@ from free_claude_code.config.provider_catalog import (
 )
 
 _EXPECTED_PROVIDER_ORDER: tuple[str, ...] = (
+    "atria",
+    "inception",
     "commandcode",
     "kimchi",
     "nvidia_nim",

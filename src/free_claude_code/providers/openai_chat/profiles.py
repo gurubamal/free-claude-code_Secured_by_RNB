@@ -7,6 +7,7 @@ from typing import Any, Literal
 
 from free_claude_code.application.errors import InvalidRequestError
 from free_claude_code.config.constants import ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS
+from free_claude_code.config.provider_model_defaults import atria_context_window
 from free_claude_code.core.anthropic import ReasoningReplayMode
 from free_claude_code.core.anthropic.models import MessagesRequest
 from free_claude_code.core.history_replay import HistoryScope
@@ -235,6 +236,39 @@ def _zai_profile(provider_name: str) -> OpenAIChatProfile:
 
 
 OPENAI_CHAT_PROFILES: dict[str, OpenAIChatProfile] = {
+    "atria": OpenAIChatProfile(
+        _policy(
+            "ATRIA",
+            ReasoningReplayMode.DISABLED,
+            default_max_tokens=ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS,
+        ),
+        NO_REASONING,
+        model_listing=OpenAIModelListing(
+            path="/models",
+            context_window_tokens_resolver=atria_context_window,
+            max_output_tokens_path=("max_output_tokens",),
+            input_modalities_path=("input_modalities",),
+        ),
+    ),
+    "inception": OpenAIChatProfile(
+        _policy(
+            "INCEPTION",
+            ReasoningReplayMode.DISABLED,
+            default_max_tokens=ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS,
+            max_tokens_field="max_completion_tokens",
+            strip_message_names=True,
+            unsupported_body_keys=frozenset({"parallel_tool_calls", "top_p"}),
+        ),
+        NamedEffortReasoning(
+            _LOW_MEDIUM_HIGH, disabled_value="instant", enabled_value="medium"
+        ),
+        model_listing=OpenAIModelListing(
+            path="/chat/completions/models",
+            context_window_tokens_path=("context_length",),
+            max_output_tokens_path=("max_output_length",),
+            input_modalities_path=("input_modalities",),
+        ),
+    ),
     "commandcode": OpenAIChatProfile(
         _policy(
             "COMMANDCODE",

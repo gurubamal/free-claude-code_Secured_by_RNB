@@ -14,6 +14,7 @@ import httpx
 
 from free_claude_code.config.provider_catalog import PROVIDER_CATALOG
 from free_claude_code.config.settings import Settings
+from free_claude_code.core.google_errors import google_access_message
 from free_claude_code.core.json_types import JsonValue
 from free_claude_code.providers.runtime.config import string_setting
 
@@ -211,6 +212,12 @@ def _interpret(key: str, probe: _Probe, response: httpx.Response) -> CredentialC
                 "The key was recognized, but the provider reports a billing or access restriction.",
             )
         return CredentialCheck(key, CredentialStatus.VERIFIED, "API key accepted.")
+    if (
+        probe.provider_id == "gemini"
+        and response.status_code == 403
+        and (message := google_access_message(payload))
+    ):
+        return _unverified(key, message)
     # Require an API error body; an HTML intermediary's auth challenge is not
     # evidence that the provider rejected the submitted credential.
     api_error = isinstance(payload, Mapping) and bool(

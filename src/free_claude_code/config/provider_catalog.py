@@ -132,6 +132,26 @@ class ProviderDescriptor:
 
 
 PROVIDER_CATALOG: dict[str, ProviderDescriptor] = {
+    "atria": ProviderDescriptor(
+        provider_id="atria",
+        display_name="Atria",
+        website_url="https://atria-asi.ai/",
+        logo_filename="atria.svg",
+        credential_env="ATRIA_API_KEY",
+        credential_url="https://api.atria-asi.ai/console",
+        credential_attr="atria_api_key",
+        default_base_url="https://api.atria-asi.ai/v1",
+    ),
+    "inception": ProviderDescriptor(
+        provider_id="inception",
+        display_name="Inception",
+        website_url="https://www.inceptionlabs.ai/",
+        logo_filename="inception.svg",
+        credential_env="INCEPTION_API_KEY",
+        credential_url="https://platform.inceptionlabs.ai/",
+        credential_attr="inception_api_key",
+        default_base_url="https://api.inceptionlabs.ai/v1",
+    ),
     "commandcode": ProviderDescriptor(
         provider_id="commandcode",
         display_name="Command Code",

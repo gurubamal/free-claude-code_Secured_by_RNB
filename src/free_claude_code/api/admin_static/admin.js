@@ -693,7 +693,8 @@ function providerCheckResult(providerId) {
   const discovery = state.startup?.startup?.providers?.[providerId];
   if (discovery === "starting") return { status: "checking", message: "Checking models…" };
   if (discovery === "failed") {
-    return { status: "error", message: "Could not load models. Check the provider's settings and retry." };
+    const detail = state.startup?.startup?.provider_errors?.[providerId];
+    return { status: "error", message: detail || "Could not load models. Check the provider's settings and retry." };
   }
   if (discovery === "ready") {
     return { status: "ok", message: modelCountMessage(state.startup.cached_models[providerId]?.length || 0) };

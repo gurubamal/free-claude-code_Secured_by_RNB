@@ -29,11 +29,13 @@ from free_claude_code.config.free_providers import (
 )
 from free_claude_code.config.paths import config_dir_path
 from free_claude_code.config.provider_catalog import PROVIDER_CATALOG
+from free_claude_code.config.provider_model_defaults import DOCUMENTED_MODEL_DEFAULTS
 from free_claude_code.core.failures import ExecutionFailure, FailureKind
 from free_claude_code.core.free_accounts import (
     FreeAccountConfirmations,
     credential_fingerprint,
 )
+from free_claude_code.core.google_errors import GoogleAccessError, google_access_message
 from free_claude_code.core.private_storage import (
     atomic_write_private_text,
     read_private_text,
@@ -189,12 +191,19 @@ class AutomaticFreePool:
             async with client.stream(
                 "POST" if body is not None else "GET", url, headers=headers, json=body
             ) as response:
-                response.raise_for_status()
                 raw = bytearray()
                 async for part in response.aiter_bytes():
                     raw.extend(part)
                     if len(raw) > MAX_CATALOG_BYTES:
                         raise ValueError("Catalog exceeds bounded discovery size")
+                if native_gemini and response.is_error:
+                    try:
+                        message = google_access_message(json.loads(raw))
+                    except ValueError:
+                        message = None
+                    if message:
+                        raise GoogleAccessError(message)
+                response.raise_for_status()
                 return bytes(raw)
 
     async def refresh(self, settings, *, force=False):
@@ -328,6 +337,11 @@ class AutomaticFreePool:
                                 models, complete = await self._discover(
                                     client, settings, policy, metadata
                                 )
+                            report["catalog_models"] = len(models)
+                            report["below_context_minimum"] = sum(
+                                m.context is not None and m.context < MIN_CONTEXT_TOKENS
+                                for m in models
+                            )
                             models = [
                                 m
                                 for m in models
@@ -340,6 +354,10 @@ class AutomaticFreePool:
                                 coverage="COMPLETE" if complete else "PARTIAL",
                             )
                             return models, report
+                        except GoogleAccessError as error:
+                            report.update(
+                                state="DISCOVERY_REJECTED", message=error.message
+                            )
                         except httpx.HTTPStatusError as error:
                             report.update(
                                 state="DISCOVERY_REJECTED",
@@ -439,7 +457,9 @@ class AutomaticFreePool:
         if provider == "gemini":
             # Use the native catalog for limits/capabilities; never put keys in URLs.
             base = "https://generativelanguage.googleapis.com/v1beta"
-        catalog_url = base + "/models"
+        catalog_url = base + (
+            "/chat/completions/models" if provider == "inception" else "/models"
+        )
         next_url = catalog_url
         rows = []
         complete = False
@@ -540,7 +560,9 @@ class AutomaticFreePool:
                 "supportedGenerationMethods", []
             ):
                 continue
-            info = reference.get(
+            info = DOCUMENTED_MODEL_DEFAULTS.get(provider, {}).get(
+                model_id
+            ) or reference.get(
                 model_id, reference.get(model_id.removeprefix("models/"), {})
             )
             if not info and provider in {"commandcode", "cline_pass"}:
@@ -566,11 +588,13 @@ class AutomaticFreePool:
             output = (
                 positive_int(row.get("top_provider", {}).get("max_completion_tokens"))
                 or positive_int(row.get("max_output_tokens"))
+                or positive_int(row.get("max_output_length"))
                 or positive_int(row.get("outputTokenLimit"))
                 or positive_int(info.get("limit", {}).get("output"))
             )
             tools = (
                 "tools" in params
+                or "tools" in row.get("supported_features", [])
                 or caps.get("tool_calling") is True
                 or caps.get("tools") is True
                 or caps.get("function_calling") is True
