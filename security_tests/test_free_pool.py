@@ -21,6 +21,7 @@ from free_claude_code.config.settings import Settings
 from free_claude_code.core.failures import ExecutionFailure, FailureKind
 from free_claude_code.core.free_accounts import FreeAccountConfirmations
 from free_claude_code.core.free_stream import FreeStreamCheck, retry_seconds
+from free_claude_code.providers.direct_chat import prepare_chat_body
 
 
 @pytest.mark.parametrize(
@@ -428,6 +429,7 @@ def test_chat_cross_provider_failover_and_shared_cooldown(monkeypatch, stream):
         SimpleNamespace(
             requests=SimpleNamespace(current_settings=lambda: settings),
             admin=SimpleNamespace(admin_status=None),
+            prepare_chat_body=prepare_chat_body,
         )
     )
     pool = freeze_pool(
@@ -491,6 +493,7 @@ def test_admin_free_status_requires_session_and_proxy_status_requires_token():
         SimpleNamespace(
             requests=SimpleNamespace(current_settings=lambda: settings),
             admin=SimpleNamespace(admin_status=None),
+            prepare_chat_body=prepare_chat_body,
         )
     )
     with TestClient(
@@ -582,6 +585,7 @@ def test_http_messages_responses_routes_choose_free_pool_and_strip_paid_extras(w
                 current_settings=lambda: settings, acquire=AsyncMock(return_value=lease)
             ),
             admin=SimpleNamespace(admin_status=None),
+            prepare_chat_body=prepare_chat_body,
             web_tools=SimpleNamespace(),
         )
     )

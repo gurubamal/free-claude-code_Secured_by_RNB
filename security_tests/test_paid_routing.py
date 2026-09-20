@@ -15,6 +15,7 @@ from free_claude_code.application.model_metadata import ProviderModelInfo
 from free_claude_code.config.free_providers import POLICY_BY_ID
 from free_claude_code.config.settings import Settings
 from free_claude_code.core.failures import ExecutionFailure, FailureKind
+from free_claude_code.providers.direct_chat import prepare_chat_body
 from free_claude_code.providers.open_router.client import (
     _PROFILE,
     OpenRouterChatBehavior,
@@ -248,7 +249,10 @@ def test_free_price_guard_survives_paid_opt_in():
     paid = behavior.prepare_create_body({"model": "paid-model", "messages": []})
     assert "extra_body" not in paid
     _, _, body = chat_target(
-        Settings(allow_paid_api_models=True), model("open_router", "paid-model"), {}
+        Settings(allow_paid_api_models=True),
+        model("open_router", "paid-model"),
+        {},
+        prepare_body=prepare_chat_body,
     )
     assert "provider" not in body
 

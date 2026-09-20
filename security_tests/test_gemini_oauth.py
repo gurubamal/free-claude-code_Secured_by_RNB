@@ -21,6 +21,7 @@ from free_claude_code.core.private_storage import (
     atomic_write_private_text,
     read_private_text,
 )
+from free_claude_code.providers.direct_chat import prepare_chat_body
 from free_claude_code.providers.gemini_oauth.auth import GeminiOAuthManager
 from free_claude_code.providers.gemini_oauth.client import (
     MODELS_URL,
@@ -368,6 +369,7 @@ def test_chat_ingress_uses_oauth_owner_and_falls_back_before_output(
             current_settings=lambda: settings, acquire=AsyncMock(return_value=lease)
         ),
         admin=SimpleNamespace(admin_status=None),
+        prepare_chat_body=prepare_chat_body,
     )
     requests = []
     real_client = httpx.AsyncClient

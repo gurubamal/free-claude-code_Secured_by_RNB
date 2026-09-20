@@ -97,6 +97,7 @@ class ModelRouter:
             reasoning_preference = (
                 ReasoningPreference.OFF
                 if force_reasoning_off
+                and self._settings.reasoning_policy is ReasoningPreference.CLIENT
                 else self._settings.reasoning_policy
             )
             logger.debug(

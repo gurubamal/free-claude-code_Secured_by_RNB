@@ -26,6 +26,16 @@ def _configure(
         raise ValueError(
             "This launcher owns its permission, settings and MCP boundaries"
         )
+    env = build_claude_proxy_env(
+        proxy_root_url=ctx.proxy_root_url,
+        auth_token=ctx.auth_token,
+        base_env=ctx.base_env,
+    )
+    effort = ctx.settings.reasoning_policy.value
+    if effort in {"low", "medium", "high", "xhigh", "max"}:
+        # The environment form persists max for each launched session, including
+        # its subagents. Claude's model/organization capability caps still apply.
+        env["CLAUDE_CODE_EFFORT_LEVEL"] = effort
     return PreparedLaunch(
         [
             ctx.binary_path,
@@ -40,11 +50,7 @@ def _configure(
             "--mcp-config",
             '{"mcpServers":{}}',
         ],
-        build_claude_proxy_env(
-            proxy_root_url=ctx.proxy_root_url,
-            auth_token=ctx.auth_token,
-            base_env=ctx.base_env,
-        ),
+        env,
     )
 
 

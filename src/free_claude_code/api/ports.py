@@ -1,6 +1,6 @@
 """Runtime capabilities consumed by the HTTP API adapter."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -13,6 +13,7 @@ from free_claude_code.application.model_metadata import ProviderModelRefreshResu
 from free_claude_code.application.ports import RequestRuntimePort, TaskController
 from free_claude_code.application.web_tools.ports import WebToolsPort
 from free_claude_code.config.admin.state import ConfigInputValue, ValueState
+from free_claude_code.config.settings import Settings
 from free_claude_code.core.json_types import JsonObject
 
 
@@ -79,3 +80,4 @@ class ApiServices:
     tasks: TaskController
     web_tools: WebToolsPort
     code: CodeApplicationPort | None = None
+    prepare_chat_body: Callable[[Settings, str, dict], dict] | None = None

@@ -21,6 +21,7 @@ This repository builds on an existing MIT-licensed project; the upstream source 
 | Password reset | Invalidates browser sessions while preserving provider configuration |
 | Automatic routing | Free by default; opt-in subscriptions and paid APIs, configurable category/provider order, persistent cooldowns and a strict 512k+ floor |
 | Route visibility | Actual provider/model, billing category, latest attempt and last completed success in the web controls |
+| Reasoning controls | One root effort policy for Messages, Responses and Chat Completions, preserved through fallback; Max maps through each provider's adapter, and the Claude launcher inherits fixed effort |
 | Google account login | Gemini API browser OAuth with PKCE, private token storage, automatic refresh and disconnect; requires your own Google Cloud project and Desktop OAuth client |
 | Additional provider cards | Atria and Inception API-key configuration, live model discovery and Chat adapters; their current 256k/260k models remain below the required 512k routing minimum |
 | Claude launcher | Automatic proxy startup, inherited credential-environment filtering, normal permission prompts, and inherited hooks/MCP disabled |
@@ -28,6 +29,12 @@ This repository builds on an existing MIT-licensed project; the upstream source 
 | Dependencies | Locked installation, pinned build tools and security minimums for packages flagged by the dated audit |
 
 The proxy and provider-adapter foundation comes from upstream. The RNB additions and policy changes are documented in [HARDENING.md](HARDENING.md). The `Secured_by_RNB` suffix identifies this fork; it is not a security certification or a promise of unlimited free usage.
+
+## Maximum reasoning
+
+In **Admin → Reasoning**, set the root policy to **Max**, with Fable, Opus, Sonnet and Haiku set to **Max** or **Inherit**. The root setting controls automatic routing and overrides lower or disabled effort sent by a client. Chat Completions uses the same provider reasoning encoders as the other interfaces, including after provider fallback. The Claude launcher passes a fixed root effort through `CLAUDE_CODE_EFFORT_LEVEL`; restart the CLI to update its session display. The gateway applies a saved change to subsequent requests.
+
+Max requests the strongest reasoning setting supported by the adapter: for example, Inception receives `high`, while OpenRouter receives `reasoning.effort=max`. Providers with no supported effort control keep their own defaults. This does not guarantee a particular internal reasoning length, enable paid access, increase context limits, or remove output/quota limits. Higher effort can use more output tokens and take longer. See the [routing guide](FREE_ROUTING.md#reasoning-policy) for details.
 
 ## Admin interface
 

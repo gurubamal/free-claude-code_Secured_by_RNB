@@ -4,6 +4,12 @@ Open the running app at <http://127.0.0.1:8082/admin>. For installation, launch 
 
 These three screenshots were supplied by the maintainer on **2026-09-20** and are included unchanged. They show the Providers page before the latest routing controls. Counts and configuration states are historical snapshots, not live availability or successful inference checks. Provider names and logos identify their respective services and do not imply endorsement.
 
+## Maximum reasoning across clients
+
+Open **Reasoning** in Admin and set **Reasoning Policy** (root) to **Max**. Set Fable, Opus, Sonnet and Haiku to **Max** or **Inherit**, then save. The root choice applies across automatic routing and fallback for all three API interfaces. Lower effort sent by a client cannot override a fixed root policy. Restart a Claude CLI launched through this app to inherit the updated effort display.
+
+Max uses each adapter's supported controls; Inception maps it to `high`. Providers without a supported control keep their defaults. This setting does not change billing permissions, the 512k context minimum, quotas or output limits. Higher reasoning effort can increase token use and latency. See the [reasoning policy](../FREE_ROUTING.md#reasoning-policy).
+
 ## 1. Connections and configured providers
 
 ![Admin overview with GitHub Copilot and OpenAI ChatGPT connection cards, a configured OpenRouter card, and cloud-provider setup buttons](images/admin-providers-overview.png)

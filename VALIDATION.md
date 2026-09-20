@@ -2,6 +2,20 @@
 
 Release: `6.2.46+rnb.1`, Windows, Python 3.14.0.
 
+## Maximum reasoning across ingress and fallback — 2026-09-20
+
+Fixed effort now applies to raw Chat Completions through the existing provider encoders, as well as Messages and Responses. Each fallback gets its own copied and normalized body. Fixed configuration overrides client disable/low effort and the classifier speed optimization while preserving classifier verdict filtering. The Claude launcher propagates fixed root effort through its child environment. Routing status exposes the configured root policy without credentials. Providers with no implemented reasoning control keep their defaults; output caps, quotas and the 512k floor remain separate.
+
+**388 scoped tests passed in 52.15 seconds**, including 38 new cases for provider wire mappings, client overrides, streaming/non-streaming 429→503→success fallback, immutable request history, Inception request shaping, all Claude route names, classifier filtering and launcher permissions:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q -n 4 security_tests tests/application/test_reasoning.py tests/api/test_classifier_response.py tests/contracts/test_startup_import_boundaries.py tests/contracts/test_provider_catalog_order.py tests/contracts/test_admin_provider_manifest.py tests/config/test_provider_catalog.py tests/config/test_admin_status.py tests/providers/test_model_token_limit_profiles.py tests/providers/test_credential_validation.py tests/providers/test_gemini.py --tb=short --show-capture=no
+```
+
+A broader diagnostic run also found **14 failures** in `test_classifier_provider_compatibility.py` and `test_import_boundaries.py`. An isolated checkout of the published parent `56d18d7` reproduced the exact same 14 failing test IDs (14 failed, 28 passed). These existing expectations about upstream output limits, routing and module boundaries are not a clean full-suite result. The new code adds no import-boundary failures. Ruff and formatting checks passed.
+
+At **13:57:02 UTC (19:27:02 IST)**, after restart, the local gateway status returned HTTP 200 with `reasoning_policy=max` and `minimum_context_tokens=512000`. A fresh private-store read showed Max for root/Fable/Opus/Sonnet/Haiku. This is a configuration/runtime check; the provider request tests above use synthetic HTTP and do not prove live inference for every connected account. No billable inference was sent for this update.
+
 ## Atria, Inception and Gemini catalog diagnostics — 2026-09-20
 
 Added Atria and Inception cards, masked managed API-key fields, fixed official endpoints and OpenAI-compatible Chat adapters. Paid-route permission is required; their current documented 256k/260k models do not pass the 512k floor. Inception uses its chat-only catalog and standard SSE; its publicly readable catalog is not treated as credential verification. Atria documentation supplements only an exact live model ID. Neither integration was tested with a real provider key or authenticated generation.

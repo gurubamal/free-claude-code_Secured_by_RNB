@@ -38,11 +38,12 @@ _ALLOWED = frozenset(
         "seed",
         "frequency_penalty",
         "presence_penalty",
+        "reasoning_effort",
     }
 )
 
 
-def chat_target(settings, model, payload):
+def chat_target(settings, model, payload, *, prepare_body):
     body = {k: v for k, v in payload.items() if k in _ALLOWED}
     body["model"] = model.model_id
     maximum = body.pop("max_completion_tokens", body.get("max_tokens", 8192))
@@ -51,6 +52,7 @@ def chat_target(settings, model, payload):
         model.output_limit or 8192,
         8192,
     )
+    body = prepare_body(settings, model.provider_id, body)
     if model.provider_id == "open_router" and model.billing == "free":
         body = free_request_body(body, model=model.model_id)
     if model.provider_id in {"gemini", "gemini_oauth"}:
@@ -119,6 +121,9 @@ async def free_chat(
     except ExecutionFailure as failure:
         return failure_response(failure)
     stream = payload.get("stream") is True
+    prepare_body = getattr(request.app.state.services, "prepare_chat_body", None)
+    if prepare_body is None:
+        raise HTTPException(503, "Chat provider adapter is unavailable")
     client = httpx.AsyncClient(
         trust_env=False, follow_redirects=False, timeout=httpx.Timeout(45, connect=10)
     )
@@ -136,7 +141,9 @@ async def free_chat(
         for model in models:
             if pool.cooldown(settings, model):
                 continue
-            url, headers, body = chat_target(settings, model, payload)
+            url, headers, body = chat_target(
+                settings, model, payload, prepare_body=prepare_body
+            )
             body["stream"] = stream
             quota = None
             try:

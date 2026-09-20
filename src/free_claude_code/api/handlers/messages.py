@@ -147,9 +147,9 @@ class MessagesHandler:
                         request_id=request_id,
                     )
                 )
-            if routed.reasoning.control is ReasoningControl.PREFER_OFF and isinstance(
-                result, _MessagesStreamResult
-            ):
+            if detect_safety_classifier_stop_sequence(
+                routed.request
+            ) is not None and isinstance(result, _MessagesStreamResult):
                 result = _MessagesStreamResult(classifier_response(result.body))
             return await self._to_public_response(
                 result,
@@ -314,7 +314,12 @@ class MessagesHandler:
         if classifier_stop_sequence is None:
             return routed
 
-        reasoning_changed = routed.reasoning.control is not ReasoningControl.PREFER_OFF
+        # Classifier optimization must not downgrade an explicit reasoning choice.
+        reasoning_changed = (
+            routed.reasoning.control is not ReasoningControl.PREFER_OFF
+            and routed.resolved.reasoning_preference.value
+            not in {"low", "medium", "high", "xhigh", "max"}
+        )
         stop_sequences = routed.request.stop_sequences
         remaining_stop_sequences = (
             [

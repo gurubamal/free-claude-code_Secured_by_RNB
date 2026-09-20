@@ -1114,6 +1114,7 @@ class AutomaticFreePool:
                 for kind in ("free", "subscription", "paid_api")
             },
             "minimum_context_tokens": MIN_CONTEXT_TOKENS,
+            "reasoning_policy": settings.reasoning_policy.value,
             "refreshed_at": datetime.fromtimestamp(self._refreshed, UTC).isoformat(),
             "catalog_ttl_seconds": CATALOG_TTL,
             "eligible_models": len(self._catalog),

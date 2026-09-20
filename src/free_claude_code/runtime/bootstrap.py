@@ -96,12 +96,15 @@ def build_asgi_app(
             "gemini_oauth": google_auth,
         },
     )
+    from free_claude_code.providers.direct_chat import prepare_chat_body
+
     services = ApiServices(
         requests=provider_manager,
         admin=runtime,
         tasks=runtime,
         web_tools=HTTPWebToolsClient(),
         code=code_service,
+        prepare_chat_body=prepare_chat_body,
     )
     return RuntimeASGIApp(create_app(services), runtime)
 

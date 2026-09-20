@@ -17,6 +17,7 @@ from free_claude_code.core.free_quota import (
     daily_free_quota,
     daily_free_quota_from_error,
 )
+from free_claude_code.providers.direct_chat import prepare_chat_body
 from free_claude_code.providers.open_router import OpenRouterProvider
 from tests.providers.request_factory import make_messages_request
 from tests.providers.support import (
@@ -194,6 +195,7 @@ def test_chat_daily_quota_sends_one_request_and_stops(monkeypatch, stream):
     services = SimpleNamespace(
         requests=SimpleNamespace(current_settings=lambda: settings),
         admin=SimpleNamespace(admin_status=None),
+        prepare_chat_body=prepare_chat_body,
     )
     from free_helpers import freeze_pool, model
 

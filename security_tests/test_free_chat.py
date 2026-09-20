@@ -8,6 +8,7 @@ from starlette.testclient import TestClient
 
 from free_claude_code.api.app import create_app
 from free_claude_code.config.settings import Settings
+from free_claude_code.providers.direct_chat import prepare_chat_body
 
 
 @pytest.mark.parametrize("statuses", [[200], [429, 503, 200], [429, 429, 429]])
@@ -55,6 +56,7 @@ def test_chat_enforces_zero_cost_and_bounded_retries(
     services = SimpleNamespace(
         requests=SimpleNamespace(current_settings=lambda: settings),
         admin=SimpleNamespace(admin_status=None),
+        prepare_chat_body=prepare_chat_body,
     )
     app = create_app(services)
     freeze_pool(

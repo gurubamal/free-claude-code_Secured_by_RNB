@@ -39,6 +39,17 @@ def resolve_responses_reasoning_policy(
     )
 
 
+def resolve_chat_reasoning_policy(
+    request: Mapping[str, object], preference: ReasoningPreference
+) -> ReasoningPolicy:
+    """Apply the root preference to a Chat Completions client's effort."""
+    effort, disabled = _output_effort({"effort": request.get("reasoning_effort")})
+    client_policy = (
+        ReasoningPolicy.off() if disabled else ReasoningPolicy(effort=effort)
+    )
+    return _apply_reasoning_preference(client_policy, preference)
+
+
 def _apply_reasoning_preference(
     client_policy: ReasoningPolicy,
     preference: ReasoningPreference,

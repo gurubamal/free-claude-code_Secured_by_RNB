@@ -2,6 +2,16 @@
 
 Policy updated 2026-09-20. The minimum is **512,000 context tokens** (decimal 512k) for every primary and fallback, including paid, subscription and local models. An experimental maximum does not replace the provider's active default limit. Context size is not a daily allowance, output allowance or evidence of coding quality.
 
+## Reasoning policy
+
+Set **Admin → Reasoning → Reasoning Policy** to **Max** to override client effort across Messages, Responses and Chat Completions, including every automatic fallback. Set each Claude route override to **Inherit** or **Max** for consistency when automatic routing is disabled. Fixed configuration also takes precedence over a client's no-thinking model alias and the classifier's usual speed optimization; classifier verdict filtering remains enabled.
+
+The adapter maps Max to its supported API controls. Inception and Gemini receive `high`; DeepSeek receives `max`; OpenRouter and Kilo receive a `reasoning` object with effort `max`. NVIDIA NIM uses the existing thinking template/budget encoder. Providers without an implemented effort control retain their defaults; selecting Max cannot create a reasoning capability. Protocol shapes and output limits are applied separately for each fallback, without carrying provider-specific fields into the next request.
+
+The Claude launcher sets `CLAUDE_CODE_EFFORT_LEVEL` for fixed root effort, so newly launched sessions and their child agents inherit it. Claude's model/organization caps can affect the displayed level; the gateway's configured policy controls its upstream request. Other clients may display their own local effort setting even when the gateway overrides it. See [Claude's effort controls](https://code.claude.com/docs/en/model-config#adjust-effort-level), [OpenRouter reasoning controls](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens), and [Inception reasoning efforts](https://docs.inceptionlabs.ai/capabilities/reasoning-efforts).
+
+Max does not enlarge the current 8,192-token automatic output ceiling or consume the whole context window as reasoning. Reasoning and visible output can share that ceiling. Provider quotas, paid permissions, the 512k floor, tool support and request-fit checks still apply. A higher effort request is not proof of a particular amount of internal computation. The shipped root default remains **Client**; Max is an explicit saved preference.
+
 ## Setup
 
 For a visual walkthrough of provider configuration, see the [Admin screenshot guide](docs/ADMIN_GUIDE.md). Its provider catalog counts are separate from the eligible-model counts on the automatic routing page.
