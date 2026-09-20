@@ -861,10 +861,15 @@ class AutomaticFreePool:
             self._last_attempt = {**(self._last_attempt or {}), **details}
         return details
 
-    def record_failure(self, settings, model, failure, *, request_id=None):
+    def record_failure(
+        self, settings, model, failure, *, request_id=None, affects_availability=True
+    ):
         self._finish_attempt(
             model, "failed", request_id=request_id, status_code=failure.status_code
         )
+        if not affects_availability:
+            # Local request conversion says nothing about upstream availability.
+            return
         scope = self._scope(settings, model.provider_id)
         if model.billing != "free":
             scope += ":" + model.billing

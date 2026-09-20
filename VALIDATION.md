@@ -102,3 +102,19 @@ Installed-Chrome production-server testing passed **eight checks**. The route pa
 The live installation explicitly enabled subscriptions and paid APIs with free → subscription → paid API priority; shipped defaults remain free-only. OpenRouter access was constrained by daily free exhaustion and absent paid balance. Cline, Command Code and Kimchi had no saved credentials during these checks, so their inference was not live validated. Anonymous Cline catalog inspection found no exact matches in its dedicated registry, prompting exact-ID fallback to the general OpenRouter registry; primary provider limits retain precedence. Missing metadata still excludes a model.
 
 Credentials, authenticated account payloads and private login records are excluded from public artifacts. Before publication, all 875 tracked/new files were scanned in memory against ten current private credential/identity/hash values and common token patterns; no matches or private credential paths were found. The staged Git index is checked again before committing. These bounded scans do not prove an absence of every possible secret or vulnerability. The dependency set did not change and the earlier advisory audit was not rerun. No prolonged task, 512k prompt, every provider account or all operating systems were validated.
+
+## Empty inline system entries during session continuation — 2026-09-20
+
+An inline `{"role":"system","content":[]}` in a resumed history triggered a deterministic Chat conversion exception. Automatic execution also incorrectly remapped that local request error to HTTP 503 and cooled the selected model. Retrying the same history therefore repeated the failure rather than testing provider availability.
+
+The converter now omits empty inline system entries without inserting an extra user turn. Nonempty instructions, tool calls/results and original input objects are preserved. Unsupported non-text system blocks remain errors. Automatic execution preserves the original application error kind/status, and local invalid-request failures update attempt status without creating an upstream cooldown.
+
+Three converter cases failed before the fix. API regression cases also reproduced HTTP 503 for streaming and non-streaming continuation. After the fix, **149 targeted tests passed**, followed by **1,153 scoped tests in 68.51 seconds**:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest security_tests tests/core tests/providers/test_converter.py tests/providers/test_deepseek.py tests/providers/test_open_router.py tests/application/test_execution.py -n 0 -q --tb=short --show-capture=no
+```
+
+The new API tests use a real DeepSeek adapter with synthetic SDK responses. They verify that continued history reaches generation, instructions/tool results survive, unsupported content returns HTTP 400 without making an upstream call, and a subsequent valid request can use the same provider immediately. Ruff and whitespace checks passed. Browser assets and dependencies did not change, so their previous dated checks were not rerun.
+
+After restarting the local gateway, a bounded live Messages request at **09:22:40 UTC (14:52:40 IST)** included two empty inline system entries and synthetic tool history. It returned HTTP 200 with exact `RESUME_OK` in **3.61 seconds** through `deepseek/deepseek-flash`. No real session content or project files were sent in this probe. This confirms the reported conversion shape works after restart; it does not guarantee uninterrupted future provider capacity. The existing client session can continue without clearing its history for this issue.

@@ -285,16 +285,58 @@ def test_openai_build_rejects_non_text_inline_system_blocks() -> None:
         build_base_request_body(request)
 
 
-def test_openai_build_rejects_empty_inline_system_content() -> None:
+@pytest.mark.parametrize(
+    "empty_content",
+    [[], "", [{"type": "text", "text": "", "cache_control": {"type": "ephemeral"}}]],
+)
+def test_openai_build_ignores_empty_inline_system_without_losing_history(
+    empty_content,
+) -> None:
+    messages = [
+        {"role": "user", "content": "Read the saved note."},
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "call_read",
+                    "name": "Read",
+                    "input": {"file_path": "note.txt"},
+                }
+            ],
+        },
+        {"role": "system", "content": empty_content},
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "call_read",
+                    "content": "Saved result.",
+                }
+            ],
+        },
+        {"role": "system", "content": empty_content},
+        {"role": "system", "content": "Continue using the saved result."},
+        {"role": "user", "content": "continue"},
+    ]
     request = MessagesRequest.model_validate(
         {
             "model": "model",
-            "messages": [{"role": "system", "content": []}],
+            "system": "Keep the existing safety instructions.",
+            "messages": messages,
         }
     )
-
-    with pytest.raises(OpenAIConversionError, match="contain text"):
-        build_base_request_body(request)
+    expected = request.model_copy(
+        update={
+            "messages": [
+                msg for index, msg in enumerate(request.messages) if index not in (2, 4)
+            ]
+        }
+    )
+    before = request.model_dump()
+    assert build_base_request_body(request) == build_base_request_body(expected)
+    assert request.model_dump() == before
 
 
 # --- Tool Conversion Tests ---

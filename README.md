@@ -109,6 +109,10 @@ The stable client model ID remains `open_router/openrouter/free` for compatibili
 
 Free providers can exhaust quotas or go offline. Claude is configured for a 512,000-token compaction window with a 60% trigger. Keep native session persistence enabled and resume saved sessions after an outage. Other harnesses need their own compaction/checkpoint handling. Neither model switching nor a proxy can make every context window or free quota unlimited.
 
+### Continuing a session after tool use
+
+Empty inline system entries in client history are ignored during Chat conversion, while nonempty instructions and tool results are preserved. This fixes the former `requires an inline Anthropic system message to contain text` error. After updating and restarting the gateway, continue the existing Claude session; clearing its history is not required for this issue. Unsupported content still returns a request error, and local conversion failures do not put healthy providers into cooldown.
+
 ### OpenRouter daily quota (HTTP 429)
 
 `free-models-per-day` means the OpenRouter account's daily free-request allowance is exhausted. It is different from a full context window or an expired Claude login. The allowance is shared across OpenRouter free models; choosing another one does not restore it. A coding task can require many model requests, including follow-up turns after tool calls.

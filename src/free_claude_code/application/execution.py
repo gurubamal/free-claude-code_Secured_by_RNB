@@ -381,6 +381,7 @@ class ProviderExecutor:
                 )
                 provider_stream: AsyncIterator[str] | None = None
                 candidate_committed = False
+                local_request_error = False
                 candidate_failure: ExecutionFailure | None = None
                 try:
                     if free_model is not None:
@@ -395,8 +396,9 @@ class ProviderExecutor:
                     except ApplicationError as error:
                         if self._free_pool is None:
                             raise
+                        local_request_error = error.kind is FailureKind.INVALID_REQUEST
                         candidate_failure = ExecutionFailure(
-                            FailureKind.UNAVAILABLE, 503, error.message, False
+                            error.kind, error.status_code, error.message, False
                         )
                     finally:
                         # Initialization has its own request budget. Upstream progress
@@ -471,6 +473,7 @@ class ProviderExecutor:
                 except ApplicationError as error:
                     if self._free_pool is None:
                         raise
+                    local_request_error = error.kind is FailureKind.INVALID_REQUEST
                     candidate_failure = ExecutionFailure(
                         error.kind, error.status_code, error.message, False
                     )
@@ -515,6 +518,7 @@ class ProviderExecutor:
                         free_model,
                         candidate_failure,
                         request_id=request_id,
+                        affects_availability=not local_request_error,
                     )
                 last_failure = candidate_failure
                 if candidate_committed or index + 1 >= len(candidates):

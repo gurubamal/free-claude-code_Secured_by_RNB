@@ -517,11 +517,11 @@ class AnthropicToOpenAIConverter:
                 content,
                 context="an inline Anthropic system message",
             )
-            if system_text is None:
-                raise OpenAIConversionError(
-                    "OpenAI chat conversion requires an inline Anthropic system "
-                    "message to contain text."
-                )
+            if not system_text:
+                # Empty client/compaction placeholders carry no instructions.
+                # Omit the placeholder without inserting a synthetic user turn;
+                # non-text blocks still fail above rather than being discarded.
+                return []
             # Reserve the downstream system role for request.system at index zero.
             return [_PlainSegment([{"role": "user", "content": system_text}])]
         if role == "assistant" and isinstance(content, list):
