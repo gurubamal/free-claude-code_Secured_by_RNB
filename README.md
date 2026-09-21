@@ -87,6 +87,8 @@ Gemini API-key discovery uses Google's native, paginated model catalog. Known Go
 
 ## Switch provider or model
 
+**AgentRouter** (`AGENTROUTER_API_KEY`) is available under **Admin → Providers** using its documented [OpenAI-compatible API](https://github.com/agentrouter-org/docs/blob/main/en/qwencode.md) at `https://agentrouter.org/v1`. Save the key in Admin and enable **Allow paid API routes**. Available models enter the same priority controls, manual selection and automatic fallback as other providers, subject to the 256k context floor, tool support and request fit. Promotional credits are not treated as verified free capacity. See the [Admin instructions](docs/ADMIN_GUIDE.md#agentrouter).
+
 **Atria** (`ATRIA_API_KEY`) and **Inception** (`INCEPTION_API_KEY`) appear under Admin → Providers. Save keys there, not in repository files. Both require **Allow paid API routes** because connecting a key or receiving trial credits does not establish zero-cost access. The documented [Atria Dawn Preview](https://api.atria-asi.ai/docs) limit is 256,000 tokens and [Inception Mercury 2.5](https://docs.inceptionlabs.ai/get-started/models) is 260,000. Both meet the 256k floor adopted on 2026-09-21, subject to request fit, tools and account capacity. Inception's public catalog does not verify a saved key.
 
 In **[Routing controls](http://127.0.0.1:8082/admin/free) → Choose provider and model**, choose **Free models**, a provider and an exact model (or the provider's best eligible model), then **Use as first preference**. **Return to automatic selection** removes that preference. Enabled subscription/paid categories can also be selected explicitly.

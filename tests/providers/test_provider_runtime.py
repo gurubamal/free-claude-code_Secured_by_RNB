@@ -48,6 +48,7 @@ from free_claude_code.providers.admission import ProviderAdmissionController
 from free_claude_code.providers.cloudflare import CloudflareProvider
 from free_claude_code.providers.deepseek import DeepSeekProvider
 from free_claude_code.providers.gemini import GeminiProvider
+from free_claude_code.providers.gemini_oauth.client import GeminiOAuthProvider
 from free_claude_code.providers.github_copilot.provider import GitHubCopilotProvider
 from free_claude_code.providers.groq import GroqProvider
 from free_claude_code.providers.kilo import KiloProvider
@@ -915,6 +916,9 @@ async def test_create_provider_uses_openai_chat_openrouter_by_default():
 @pytest.mark.asyncio
 async def test_create_provider_instantiates_each_builtin():
     settings = _make_settings(
+        agentrouter_api_key="test_agentrouter_key",
+        atria_api_key="test_atria_key",
+        inception_api_key="test_inception_key",
         gemini_api_key="test_gemini_key",
         vertex_project_id="test-vertex-project",
         groq_api_key="test_groq_key",
@@ -936,6 +940,10 @@ async def test_create_provider_instantiates_each_builtin():
         sambanova_api_key="test_sambanova_key",
     )
     cases = {
+        "agentrouter": OpenAIChatProvider,
+        "atria": OpenAIChatProvider,
+        "inception": OpenAIChatProvider,
+        "gemini_oauth": GeminiOAuthProvider,
         "commandcode": OpenAIChatProvider,
         "kimchi": OpenAIChatProvider,
         "nvidia_nim": NvidiaNimProvider,
@@ -995,6 +1003,12 @@ async def test_create_provider_instantiates_each_builtin():
     sentinel_admission = MagicMock(spec=ProviderAdmissionController)
     auth = MagicMock()
     injected_factories = {
+        "gemini_oauth": lambda config, _settings, admission: GeminiOAuthProvider(
+            config,
+            auth=auth,
+            project_id="test-google-project",
+            admission=admission,
+        ),
         "openai": lambda config, _settings, admission: OpenAICodexProvider(
             config,
             auth=auth,

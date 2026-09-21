@@ -18,6 +18,15 @@ class ProviderFieldOverride(TypedDict, total=False):
 
 
 _PROVIDER_FIELD_OVERRIDES: dict[str, ProviderFieldOverride] = {
+    "AGENTROUTER_API_KEY": {
+        "description": (
+            "AgentRouter API key from agentrouter.org/console/token. Uses the "
+            "OpenAI-compatible API at agentrouter.org/v1. Requires paid-API "
+            "permission; promotional credits do not establish free capacity. "
+            "Automatic routing requires catalog-confirmed models, tool support "
+            "and at least 256k context. Saving a key does not test inference."
+        ),
+    },
     "ATRIA_API_KEY": {
         "description": (
             "Atria ASI API key from api.atria-asi.ai/console. Paid-route opt-in is "

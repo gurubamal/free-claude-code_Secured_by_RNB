@@ -236,6 +236,21 @@ def _zai_profile(provider_name: str) -> OpenAIChatProfile:
 
 
 OPENAI_CHAT_PROFILES: dict[str, OpenAIChatProfile] = {
+    "agentrouter": OpenAIChatProfile(
+        _policy(
+            "AGENTROUTER",
+            ReasoningReplayMode.DISABLED,
+            default_max_tokens=ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS,
+        ),
+        # The public compatibility guide does not document one reasoning knob
+        # valid across its models. Do not send unsupported effort parameters.
+        NO_REASONING,
+        model_listing=OpenAIModelListing(
+            context_window_tokens_path=("context_length",),
+            max_output_tokens_path=("max_output_tokens",),
+            input_modalities_path=("input_modalities",),
+        ),
+    ),
     "atria": OpenAIChatProfile(
         _policy(
             "ATRIA",

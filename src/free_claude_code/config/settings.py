@@ -269,6 +269,9 @@ class Settings(BaseModel):
     kimchi_api_key: OptionalNonEmptyString = Field(
         default=None, validation_alias="KIMCHI_API_KEY"
     )
+    agentrouter_api_key: OptionalNonEmptyString = Field(
+        default=None, validation_alias="AGENTROUTER_API_KEY"
+    )
     atria_api_key: OptionalNonEmptyString = Field(
         default=None, validation_alias="ATRIA_API_KEY"
     )

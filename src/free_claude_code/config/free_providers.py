@@ -78,6 +78,12 @@ FREE_PROVIDERS = (
 )
 PAID_PROVIDERS = (
     # A key or trial allowance does not establish zero-price access.
+    FreeProviderPolicy(
+        "agentrouter",
+        "paid_api",
+        "agentrouter",
+        "https://github.com/agentrouter-org/docs/blob/main/en/qwencode.md",
+    ),
     FreeProviderPolicy("atria", "paid_api", "atria", "https://api.atria-asi.ai/docs"),
     FreeProviderPolicy(
         "inception",

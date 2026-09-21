@@ -132,6 +132,16 @@ class ProviderDescriptor:
 
 
 PROVIDER_CATALOG: dict[str, ProviderDescriptor] = {
+    "agentrouter": ProviderDescriptor(
+        provider_id="agentrouter",
+        display_name="AgentRouter",
+        website_url="https://agentrouter.org/",
+        logo_filename="agentrouter.svg",
+        credential_env="AGENTROUTER_API_KEY",
+        credential_url="https://agentrouter.org/console/token",
+        credential_attr="agentrouter_api_key",
+        default_base_url="https://agentrouter.org/v1",
+    ),
     "atria": ProviderDescriptor(
         provider_id="atria",
         display_name="Atria",
