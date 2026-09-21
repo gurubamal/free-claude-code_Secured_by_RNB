@@ -53,6 +53,11 @@ def print_status(data):
             + " seconds before returning a terminal error."
         )
         print(
+            "Automatic retry check interval: "
+            + display(recovery.get("check_seconds", 15))
+            + " seconds; provider cooldowns still apply."
+        )
+        print(
             "Provider failure limit: "
             + display(recovery.get("provider_failure_limit", 3))
             + " per request, including recovery retries; failures rotate to the next eligible provider."
