@@ -4,6 +4,7 @@ import asyncio
 import math
 import sys
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from dataclasses import replace
 from time import monotonic
 from types import MappingProxyType
 from typing import Literal
@@ -33,6 +34,7 @@ from free_claude_code.core.trace import (
 
 from .errors import ApplicationError
 from .ports import ModelInfoLookup, ProviderResolver
+from .route_budget import current_route_budget
 from .routing import (
     ProviderModelTarget,
     ResolvedModelRoute,
@@ -79,11 +81,14 @@ class ProviderExecutor:
         self._free_pool = None
         self._free_settings = None
         self._free_models = {}
+        self._output_started = False
+        self._attempt_budget = None
 
     def configure_free_routing(self, pool, settings, models):
         self._free_pool = pool
         self._free_settings = settings
         self._free_models = {model.ref: model for model in models}
+        self._attempt_budget = current_route_budget()
 
     def _progress_timeout_failure(
         self,
@@ -366,6 +371,10 @@ class ProviderExecutor:
             progress_deadline = loop.time() + self._progress_timeout_seconds
             last_failure = None
             for index, target in enumerate(candidates):
+                if self._attempt_budget is not None and not self._attempt_budget.allows(
+                    target.provider_id
+                ):
+                    continue
                 free_model = self._free_models.get(target.provider_model_ref)
                 if free_model is not None and self._free_pool.cooldown(
                     self._free_settings, free_model
@@ -483,6 +492,7 @@ class ProviderExecutor:
                                     candidate_index=index + 1,
                                     candidate_count=len(candidates),
                                 )
+                        self._output_started = True
                         yield chunk
                         progress_deadline = loop.time() + self._progress_timeout_seconds
                 except ExecutionFailure as failure:
@@ -541,10 +551,13 @@ class ProviderExecutor:
                         candidate_failure,
                         request_id=request_id,
                         affects_availability=not local_request_error,
+                        attempt_budget=self._attempt_budget,
                     )
                 last_failure = candidate_failure
-                if candidate_committed or index + 1 >= len(candidates):
+                if candidate_committed:
                     raise candidate_failure
+                if index + 1 >= len(candidates):
+                    break
                 if self._free_pool is not None:
                     prefer_next_provider(
                         candidates,
@@ -567,13 +580,20 @@ class ProviderExecutor:
             # Candidates may have entered a provider-wide cooldown during this turn.
             if self._free_pool is not None:
                 if last_failure is not None:
-                    raise last_failure
+                    raise replace(
+                        last_failure,
+                        recovery_safe=not self._output_started
+                        and last_failure.status_code in {402, 429, 502, 503, 504, 529},
+                    )
                 raise ExecutionFailure(
                     FailureKind.UNAVAILABLE,
                     503,
                     "Every eligible fallback failed or is cooling down. Resume the saved session after capacity returns; see Admin > Routing controls.",
                     False,
+                    recovery_safe=not self._output_started,
                 )
+            elif last_failure is not None:
+                raise last_failure
 
         stream_trace: dict[str, object] = {
             "request_id": request_id,

@@ -59,6 +59,9 @@ def test_chat_enforces_zero_cost_and_bounded_retries(
         prepare_chat_body=prepare_chat_body,
     )
     app = create_app(services)
+    # Exercise bounded upstream attempts and the terminal response when the
+    # recovery queue is full; waiting/resumption has dedicated recovery tests.
+    app.state.capacity_recovery.max_waiting = 0
     freeze_pool(
         app.state.free_pool,
         [

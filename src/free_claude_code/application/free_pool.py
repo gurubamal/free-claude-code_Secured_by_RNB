@@ -14,6 +14,7 @@ from urllib.parse import urlencode, urljoin, urlsplit
 
 import httpx
 
+from free_claude_code.application.route_budget import current_route_budget
 from free_claude_code.application.route_health import VERIFIED_TTL_SECONDS, RouteHealth
 from free_claude_code.config.free_mode import MIN_CONTEXT_TOKENS
 from free_claude_code.config.free_model_preferences import (
@@ -124,6 +125,7 @@ class AutomaticFreePool:
         self._last_success = None
         self._last_success_details = None
         self._last_attempt = None
+        self.recovery_status = None
         self._load_cooldowns()
         self._health = RouteHealth()
 
@@ -441,6 +443,18 @@ class AutomaticFreePool:
             # model-specific access error masks it. Keep the account body in RAM.
             try:
                 account = json.loads(await self._fetch(client, base + "/key", key=key))
+                remaining_limit = account.get("data", {}).get("limit_remaining")
+                paid_scope = self._scope(settings, provider) + ":paid_api"
+                if (
+                    settings.allow_paid_api_models
+                    and isinstance(remaining_limit, int | float)
+                    and not isinstance(remaining_limit, bool)
+                    and remaining_limit > 0
+                    and self._cooldowns.get(paid_scope, {}).get("reason")
+                    == "key_spending_limit"
+                ):
+                    self._cooldowns.pop(paid_scope, None)
+                    self._save_cooldowns()
                 daily = account.get("data", {}).get("free_model_daily_requests", {})
                 remaining = daily.get("remaining")
                 scope = self._scope(settings, provider)
@@ -480,6 +494,24 @@ class AutomaticFreePool:
             ):
                 # Unavailable quota metadata is unknown, not zero.
                 pass
+        if provider == "deepseek" and settings.allow_paid_api_models:
+            paid_scope = self._scope(settings, provider) + ":paid_api"
+            if self._cooldowns.get(paid_scope, {}).get("reason") == "balance_exhausted":
+                try:
+                    balance = json.loads(
+                        await self._fetch(client, base + "/user/balance", key=key)
+                    )
+                    if balance.get("is_available") is True:
+                        self._cooldowns.pop(paid_scope, None)
+                        self._save_cooldowns()
+                except (
+                    httpx.HTTPError,
+                    ValueError,
+                    TypeError,
+                    AttributeError,
+                    TimeoutError,
+                ):
+                    pass
         if provider == "gemini":
             # Use the native catalog for limits/capabilities; never put keys in URLs.
             base = "https://generativelanguage.googleapis.com/v1beta"
@@ -770,12 +802,14 @@ class AutomaticFreePool:
 
     async def select(self, settings, payload):
         await self.refresh(settings)
+        attempt_budget = current_route_budget()
         context, tools, vision = request_needs(payload)
         disabled = set((settings.routing_disabled_providers or "").split(","))
         eligible = [
             m
             for m in self._catalog
             if not self.cooldown(settings, m)
+            and (attempt_budget is None or attempt_budget.allows(m.provider_id))
             and m.provider_id not in disabled
             and (m.billing != "subscription" or settings.allow_subscription_models)
             and (m.billing != "paid_api" or settings.allow_paid_api_models)
@@ -902,6 +936,7 @@ class AutomaticFreePool:
                     else " Only explicitly enabled billing categories were considered."
                 ),
                 False,
+                recovery_safe=True,
             )
         return tuple(ordered[:12])
 
@@ -985,7 +1020,14 @@ class AutomaticFreePool:
         return details
 
     def record_failure(
-        self, settings, model, failure, *, request_id=None, affects_availability=True
+        self,
+        settings,
+        model,
+        failure,
+        *,
+        request_id=None,
+        affects_availability=True,
+        attempt_budget=None,
     ):
         self._finish_attempt(
             model, "failed", request_id=request_id, status_code=failure.status_code
@@ -993,6 +1035,9 @@ class AutomaticFreePool:
         if not affects_availability:
             # Local request conversion says nothing about upstream availability.
             return
+        attempt_budget = attempt_budget or current_route_budget()
+        if attempt_budget is not None:
+            attempt_budget.record_failure(model.provider_id)
         self._health.record(
             self._health_key(settings, model),
             success=False,
@@ -1199,6 +1244,7 @@ class AutomaticFreePool:
                 and model["health"]["state"] == "VERIFIED"
             ],
             "refreshed_at": datetime.fromtimestamp(self._refreshed, UTC).isoformat(),
+            "recovery": self.recovery_status() if self.recovery_status else None,
             "catalog_ttl_seconds": CATALOG_TTL,
             "eligible_models": len(self._catalog),
             "available_models": sum(r["available_models"] for r in rows),

@@ -179,14 +179,16 @@ async def bind_response_lifetime(
 
 
 def terminal_execution_error_response(
-    *, status_code: int, content: JsonObject
+    *, status_code: int, content: JsonObject, recovery_safe: bool = False
 ) -> JSONResponse:
     """Return a final provider-execution error without enabling client retries."""
-    return JSONResponse(
+    response = JSONResponse(
         status_code=status_code,
         content=content,
         headers=dict(TERMINAL_EXECUTION_ERROR_HEADERS),
     )
+    response.fcc_recovery_safe = recovery_safe
+    return response
 
 
 def trace_terminal_execution_error(

@@ -6,10 +6,11 @@ from dataclasses import replace
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
-from starlette.responses import JSONResponse, StreamingResponse
+from starlette.responses import JSONResponse
 
 from free_claude_code.application.errors import ApplicationError
 from free_claude_code.application.free_pool import local_base
+from free_claude_code.application.route_budget import current_route_budget
 from free_claude_code.config.free_mode import free_request_body
 from free_claude_code.config.free_providers import POLICY_BY_ID, provider_key
 from free_claude_code.config.provider_catalog import PROVIDER_CATALOG
@@ -22,6 +23,7 @@ from free_claude_code.core.free_stream import FreeStreamCheck, retry_seconds
 from free_claude_code.core.provider_access import plan_access_failure
 
 from .dependencies import get_settings, require_proxy_auth
+from .response_streams import ManagedStreamingResponse
 
 router = APIRouter()
 _ALLOWED = frozenset(
@@ -75,7 +77,7 @@ def chat_target(settings, model, payload, *, prepare_body):
 
 
 def failure_response(failure, quota=None):
-    return JSONResponse(
+    response = JSONResponse(
         {
             "error": {
                 "message": failure.message,
@@ -92,6 +94,8 @@ def failure_response(failure, quota=None):
         if quota
         else {"x-should-retry": "false", "Cache-Control": "no-store"},
     )
+    response.fcc_recovery_safe = failure.recovery_safe
+    return response
 
 
 @router.post("/v1/chat/completions")
@@ -118,7 +122,18 @@ async def free_chat(
     ):
         raise HTTPException(400, "A nonempty messages array is required")
     payload = {k: v for k, v in payload.items() if k in _ALLOWED}
+    return await request.app.state.capacity_recovery.respond(
+        lambda: _free_chat_attempt(
+            request, request.app.state.services.requests.current_settings(), payload
+        ),
+        stream=payload.get("stream") is True,
+        wire="chat",
+    )
+
+
+async def _free_chat_attempt(request, settings, payload):
     pool = request.app.state.free_pool
+    attempt_budget = current_route_budget()
     try:
         models = list(await pool.select(settings, {**payload, "_fcc_wire_api": "chat"}))
     except ExecutionFailure as failure:
@@ -142,6 +157,10 @@ async def free_chat(
     handed_off = False
     try:
         for index, model in enumerate(models):
+            if attempt_budget is not None and not attempt_budget.allows(
+                model.provider_id
+            ):
+                continue
             if pool.cooldown(settings, model):
                 continue
             quota = None
@@ -331,7 +350,7 @@ async def free_chat(
                         await client.aclose()
 
                 handed_off = True
-                return StreamingResponse(
+                result = ManagedStreamingResponse(
                     events(),
                     media_type="text/event-stream",
                     headers={
@@ -345,6 +364,13 @@ async def free_chat(
                         ),
                     },
                 )
+
+                async def release(upstream=response):
+                    await upstream.aclose()
+                    await client.aclose()
+
+                result.bind_release(release)
+                return result
             except (
                 httpx.HTTPError,
                 ValueError,
@@ -367,7 +393,7 @@ async def free_chat(
                 )
                 pool.record_failure(settings, model, last, request_id=request_id)
                 prefer_next_provider(models, index)
-        return failure_response(last, quota)
+        return failure_response(replace(last, recovery_safe=True), quota)
     except asyncio.CancelledError:
         if response is not None:
             await response.aclose()
