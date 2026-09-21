@@ -150,6 +150,8 @@ The stable client model ID remains `open_router/openrouter/free` for compatibili
 
 Free providers can exhaust quotas or go offline. Claude is configured for a 256,000-token compaction window with a 60% trigger. Keep native session persistence enabled and resume saved sessions after an outage. Restart existing Claude sessions through the FCC launcher to pick up the smaller compaction window; compact an already oversized session before resuming. Other harnesses need their own compaction/checkpoint handling. Neither model switching nor a proxy can make every context window or free quota unlimited.
 
+Compaction requests use the same automatic routing. Capacity checks distinguish readable history from encoded reasoning signatures and screenshot bytes, preserving the original payload. Requests estimated to exceed every compatible enabled model receive a context-size error without a quota wait. See [request-fit details](FREE_ROUTING.md#selection-and-failures).
+
 ### Continuing a session after tool use
 
 Empty inline system entries in client history are ignored during Chat conversion, while nonempty instructions and tool results are preserved. This fixes the former `requires an inline Anthropic system message to contain text` error. After updating and restarting the gateway, continue the existing Claude session; clearing its history is not required for this issue. Unsupported content still returns a request error, and local conversion failures do not put healthy providers into cooldown.

@@ -201,7 +201,7 @@ async def test_context_vision_request_fit_and_provider_diversity():
         },
     )
     assert [m.provider_id for m in selected] == ["gemini"]
-    with pytest.raises(ExecutionFailure, match="256,000"):
+    with pytest.raises(ExecutionFailure, match="Estimated request capacity"):
         await pool.select(settings, {"messages": [{"content": "x" * 2200000}]})
 
 
