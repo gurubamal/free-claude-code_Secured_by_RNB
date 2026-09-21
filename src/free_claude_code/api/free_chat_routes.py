@@ -14,6 +14,7 @@ from free_claude_code.config.free_mode import free_request_body
 from free_claude_code.config.free_providers import POLICY_BY_ID, provider_key
 from free_claude_code.config.provider_catalog import PROVIDER_CATALOG
 from free_claude_code.config.settings import Settings
+from free_claude_code.core.billing_limits import openrouter_billing_failure
 from free_claude_code.core.failures import ExecutionFailure, FailureKind
 from free_claude_code.core.fallback_order import prefer_next_provider
 from free_claude_code.core.free_quota import MAX_QUOTA_BODY_BYTES, daily_free_quota
@@ -182,18 +183,24 @@ async def free_chat(
                         if response.status_code in {400, 401, 402, 403, 404, 413, 429}
                         else 502
                     )
-                    last = plan_access_failure(
-                        model.provider_id, raw_error, response.status_code
-                    ) or (
-                        quota.failure()
-                        if quota
-                        else ExecutionFailure(
-                            FailureKind.RATE_LIMIT
-                            if status == 429
-                            else FailureKind.UNAVAILABLE,
-                            status,
-                            f"Provider {model.provider_id} rejected this request (HTTP {status}). Only enabled routing categories may be tried.",
-                            False,
+                    last = (
+                        openrouter_billing_failure(
+                            model.provider_id, raw_error, response.status_code
+                        )
+                        or plan_access_failure(
+                            model.provider_id, raw_error, response.status_code
+                        )
+                        or (
+                            quota.failure()
+                            if quota
+                            else ExecutionFailure(
+                                FailureKind.RATE_LIMIT
+                                if status == 429
+                                else FailureKind.UNAVAILABLE,
+                                status,
+                                f"Provider {model.provider_id} rejected this request (HTTP {status}). Only enabled routing categories may be tried.",
+                                False,
+                            )
                         )
                     )
                     last = replace(
@@ -211,6 +218,14 @@ async def free_chat(
                             raise ValueError("Chat result exceeds response limit")
                     await response.aclose()
                     result = json.loads(data)
+                    billing_failure = openrouter_billing_failure(
+                        model.provider_id, result, response.status_code
+                    )
+                    if billing_failure:
+                        raise replace(
+                            billing_failure,
+                            retry_after_seconds=retry_seconds(response.headers),
+                        )
                     if not isinstance(result, dict) or not result.get("choices"):
                         raise ValueError("Invalid chat result")
                     has_output = any(

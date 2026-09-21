@@ -32,7 +32,7 @@ from free_claude_code.config.free_providers import (
 from free_claude_code.config.paths import config_dir_path
 from free_claude_code.config.provider_catalog import PROVIDER_CATALOG
 from free_claude_code.config.provider_model_defaults import DOCUMENTED_MODEL_DEFAULTS
-from free_claude_code.core.failures import ExecutionFailure, FailureKind
+from free_claude_code.core.failures import BillingLimit, ExecutionFailure, FailureKind
 from free_claude_code.core.fallback_order import reserve_provider_candidates
 from free_claude_code.core.free_accounts import (
     FreeAccountConfirmations,
@@ -924,7 +924,10 @@ class AutomaticFreePool:
                     reasons.add(
                         {
                             "daily_quota_exhausted": "free daily quota exhausted",
-                            "balance_exhausted": "paid balance unavailable",
+                            "balance_exhausted": "billing unavailable",
+                            "request_budget_exceeded": "selected model exceeds request budget",
+                            "key_spending_limit": "API key spending limit reached",
+                            "in_flight_budget": "temporary spending budget occupied",
                             "temporary_model_failure": "temporary model outage",
                             "temporary_failure": "temporary provider outage",
                             "rate_limit": "rate limited",
@@ -1003,6 +1006,20 @@ class AutomaticFreePool:
         reason = "rate_limit" if status == 429 else "temporary_failure"
         if status == 403 and failure.provider_access_blocked:
             seconds, reason = 3600, "api_access_not_in_plan"
+        elif (
+            status == 402
+            and failure.billing_limit is BillingLimit.REQUEST_BUDGET
+            and model.billing == "paid_api"
+        ):
+            # Price-dependent rejection: keep cheaper siblings and free routes
+            # eligible. A large request failing says nothing about their budget.
+            scope += ":" + model.model_id
+            seconds, reason = 60, "request_budget_exceeded"
+        elif status == 402 and failure.billing_limit is BillingLimit.IN_FLIGHT_BUDGET:
+            seconds = failure.retry_after_seconds or 45
+            reason = "in_flight_budget"
+        elif status == 402 and failure.billing_limit is BillingLimit.KEY_LIMIT:
+            seconds, reason = 3600, "key_spending_limit"
         elif status in {401, 402}:
             seconds, reason = (
                 3600,

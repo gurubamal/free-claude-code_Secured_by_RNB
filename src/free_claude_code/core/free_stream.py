@@ -5,6 +5,7 @@ import math
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 
+from .billing_limits import openrouter_billing_failure
 from .failures import ExecutionFailure, FailureKind
 from .free_quota import daily_free_quota
 from .provider_access import plan_access_failure
@@ -58,6 +59,9 @@ class FreeStreamCheck:
             }:
                 self.complete = True
             if event.get("error") or event.get("type") in {"error", "response.failed"}:
+                billing = openrouter_billing_failure(self.provider, event, 200)
+                if billing:
+                    raise billing
                 access = plan_access_failure(self.provider, event, 200)
                 if access:
                     raise access

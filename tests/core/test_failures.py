@@ -52,6 +52,7 @@ def test_execution_failure_is_the_direct_frozen_slotted_exception() -> None:
         "retryable",
         "retry_after_seconds",
         "provider_access_blocked",
+        "billing_limit",
     )
     assert ExecutionFailure.__slots__ == (
         "kind",
@@ -60,9 +61,11 @@ def test_execution_failure_is_the_direct_frozen_slotted_exception() -> None:
         "retryable",
         "retry_after_seconds",
         "provider_access_blocked",
+        "billing_limit",
     )
     assert failure.retry_after_seconds is None
     assert failure.provider_access_blocked is False
+    assert failure.billing_limit is None
     assert str(failure) == "Provider rate limit reached."
     assert failure.args == ("Provider rate limit reached.",)
 

@@ -18,6 +18,14 @@ class FailureKind(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
+class BillingLimit(StrEnum):
+    """The scope of a billing rejection, distinct from model context capacity."""
+
+    REQUEST_BUDGET = "request_budget"
+    KEY_LIMIT = "key_limit"
+    IN_FLIGHT_BUDGET = "in_flight_budget"
+
+
 @dataclass(slots=True, eq=False)
 class ExecutionFailure(Exception):
     """A finalized provider-execution failure independent of any wire protocol."""
@@ -28,6 +36,7 @@ class ExecutionFailure(Exception):
     retryable: bool
     retry_after_seconds: float | None = None
     provider_access_blocked: bool = False
+    billing_limit: BillingLimit | None = None
 
     def __post_init__(self) -> None:
         Exception.__init__(self, self.message)
