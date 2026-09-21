@@ -6,6 +6,7 @@ from free_claude_code.config.provider_catalog import (
 )
 
 _EXPECTED_PROVIDER_ORDER: tuple[str, ...] = (
+    "agentrouter",
     "atria",
     "inception",
     "commandcode",

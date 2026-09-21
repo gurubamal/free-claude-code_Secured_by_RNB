@@ -25,6 +25,14 @@ from tests.providers.support import (
 
 # Minimal primary evidence, checked 2026-09-20. No credentials/account payloads.
 ROWS = {
+    # Synthetic compatibility fixture, not an authenticated AgentRouter catalog.
+    "agentrouter": {
+        "id": "synthetic-chat",
+        "context_length": 1000000,
+        "max_output_tokens": 8192,
+        "supported_parameters": ["tools"],
+        "input_modalities": ["text"],
+    },
     "atria": {"id": "Atria-Dawn-Preview"},
     "inception": {
         "id": "mercury-2.5",
@@ -100,9 +108,11 @@ async def test_provider_catalog_and_stream_over_real_adapter(provider_id, wire):
         )
         infos = await provider.list_model_infos()
         assert len(infos) == 1
-        assert next(iter(infos)).context_window_tokens == (
-            256000 if provider_id == "atria" else 260000
-        )
+        assert next(iter(infos)).context_window_tokens == {
+            "atria": 256000,
+            "inception": 260000,
+            "agentrouter": 1000000,
+        }[provider_id]
         reasoning = ReasoningPolicy.on(effort=ReasoningEffort.HIGH)
         stream = (
             provider.stream_messages(

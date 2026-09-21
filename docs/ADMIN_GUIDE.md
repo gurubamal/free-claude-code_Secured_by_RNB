@@ -32,6 +32,14 @@ Scroll through the cloud providers to find the service whose credentials you wan
 
 For account-dependent free tiers, save the key, then open **Routing controls** in the sidebar. Confirm that the key belongs to a free account with paid billing disabled. The confirmation binds to that key and must be repeated after a key change. The app relies on this statement for account billing. Without it, these keys are used only as paid access when enabled.
 
+### AgentRouter
+
+Open **Providers → AgentRouter → Configure** and save your [AgentRouter console key](https://agentrouter.org/console/token) in the masked `AGENTROUTER_API_KEY` field. This integration uses `https://agentrouter.org/v1`, as documented in [AgentRouter's official guide](https://github.com/agentrouter-org/docs/blob/main/en/qwencode.md). It supports Chat Completions upstream; FCC translates Messages and Responses clients through that adapter.
+
+Enable **Allow paid API routes** under **Routing controls** and place AgentRouter where you want it in provider priority. A manual selection is a first preference: eligible alternatives are tried automatically on recoverable failures before response output begins. The existing cooldowns and billing permissions still apply.
+
+The live catalog determines available model IDs. Missing capability fields can use exact matches in AgentRouter's models.dev registry; unknown tools/context and models below 256k stay excluded. Catalog visibility, promotional credits and saving a key do not prove usable inference or free billing. Inference must succeed before the route is shown as verified healthy. Automatic key verification is currently unverified, and no billable request is made on save. The adapter leaves reasoning controls at the provider default because a shared effort parameter is not documented.
+
 ## 3. Remaining cloud providers and local servers
 
 ![Additional cloud-provider cards including OpenCode Zen, SiliconFlow and ZenMux, followed by the Local providers section](images/admin-cloud-and-local-providers.png)
