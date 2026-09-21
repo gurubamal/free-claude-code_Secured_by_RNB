@@ -37,6 +37,10 @@ from free_claude_code.config.free_providers import (
 from free_claude_code.config.paths import config_dir_path
 from free_claude_code.config.provider_catalog import PROVIDER_CATALOG
 from free_claude_code.config.provider_model_defaults import DOCUMENTED_MODEL_DEFAULTS
+from free_claude_code.core.agentrouter_errors import (
+    AgentRouterAccessError,
+    agentrouter_access_message,
+)
 from free_claude_code.core.failures import BillingLimit, ExecutionFailure, FailureKind
 from free_claude_code.core.fallback_order import reserve_provider_candidates
 from free_claude_code.core.free_accounts import (
@@ -235,6 +239,18 @@ class AutomaticFreePool:
                         message = None
                     if message:
                         raise GoogleAccessError(message)
+                if (
+                    urlsplit(url).hostname == "agentrouter.org"
+                    and response.status_code in (401, 403)
+                ):
+                    try:
+                        message = agentrouter_access_message(
+                            json.loads(raw), response.status_code
+                        )
+                    except ValueError:
+                        message = None
+                    if message:
+                        raise AgentRouterAccessError()
                 response.raise_for_status()
                 return bytes(raw)
 
@@ -386,6 +402,12 @@ class AutomaticFreePool:
                                 coverage="COMPLETE" if complete else "PARTIAL",
                             )
                             return models, report
+                        except AgentRouterAccessError as error:
+                            report.update(
+                                state="DISCOVERY_REJECTED",
+                                reason="client_access_restricted",
+                                message=error.message,
+                            )
                         except GoogleAccessError as error:
                             report.update(
                                 state="DISCOVERY_REJECTED", message=error.message
@@ -997,6 +1019,8 @@ class AutomaticFreePool:
                 )
             elif report["state"] == "CONFIRM_FREE_ACCOUNT":
                 details.append(provider + ": free-account confirmation missing")
+            elif report.get("reason") == "client_access_restricted":
+                details.append(provider + ": gateway client access rejected")
             elif report["state"].startswith("DISCOVERY_"):
                 details.append(provider + ": catalog unavailable")
             elif report["state"] == "NO_ELIGIBLE_MODELS":

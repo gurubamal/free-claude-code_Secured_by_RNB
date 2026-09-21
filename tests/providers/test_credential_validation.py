@@ -196,6 +196,9 @@ async def test_unsupported_shared_credentials_never_send_http(monkeypatch):
 
     _mock_http(monkeypatch, unexpected)
     supported = {PROVIDER_CATALOG[row[0]].credential_env for row in CASES}
+    # AgentRouter has a diagnostic-only read check, tested separately. Even a
+    # successful catalog leaves inference unverified.
+    supported.add("AGENTROUTER_API_KEY")
     all_keys = {d.credential_env for d in PROVIDER_CATALOG.values() if d.credential_env}
     keys = tuple(all_keys - supported)
     assert {"COMMANDCODE_API_KEY", "CLINE_API_KEY", "KIMCHI_API_KEY"} <= set(keys)

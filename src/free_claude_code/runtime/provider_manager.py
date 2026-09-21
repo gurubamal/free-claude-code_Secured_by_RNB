@@ -16,6 +16,7 @@ from free_claude_code.application.model_metadata import (
 from free_claude_code.application.ports import ModelCatalogPort, ModelCatalogSnapshot
 from free_claude_code.application.readiness import InitializationWait
 from free_claude_code.config.settings import Settings
+from free_claude_code.core.agentrouter_errors import agentrouter_access_message
 from free_claude_code.core.async_tasks import run_sync_owned
 from free_claude_code.core.google_errors import GoogleAccessError
 from free_claude_code.core.json_types import JsonObject
@@ -270,6 +271,12 @@ class ProviderRuntimeManager:
         except Exception as exc:
             if isinstance(exc, GoogleAccessError):
                 generation.provider_errors[provider_id] = exc.message
+            elif provider_id == "agentrouter" and (
+                message := agentrouter_access_message(
+                    getattr(exc, "body", None), getattr(exc, "status_code", None)
+                )
+            ):
+                generation.provider_errors[provider_id] = message
             logger.warning(
                 "Provider model discovery skipped: provider={} reason={}",
                 provider_id,
