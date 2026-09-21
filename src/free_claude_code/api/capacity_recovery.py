@@ -40,7 +40,7 @@ class CapacityRecovery:
         settings,
         *,
         wait_seconds=900,
-        check_seconds=30,
+        check_seconds=15,
         refresh_seconds=60,
         heartbeat_seconds=15,
         max_waiting=8,
