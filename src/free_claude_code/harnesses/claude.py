@@ -2,9 +2,10 @@
 
 from collections.abc import Mapping
 
+from free_claude_code.config.free_mode import MIN_CONTEXT_TOKENS
 from free_claude_code.harnesses.environment import client_environment
 
-CLAUDE_CODE_AUTO_COMPACT_WINDOW = "512000"
+CLAUDE_CODE_AUTO_COMPACT_WINDOW = str(MIN_CONTEXT_TOKENS)
 CLAUDE_BINARY_NAME = "claude"
 
 

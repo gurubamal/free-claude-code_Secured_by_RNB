@@ -65,7 +65,7 @@ async def apply_route_selection(body: RouteSelectionPayload, request: Request):
         ):
             raise HTTPException(
                 400,
-                "No matching eligible model in the current catalog. Check provider setup, free eligibility and the 512k minimum. Nothing changed.",
+                "No matching eligible model in the current catalog. Check provider setup, billing eligibility and the 256k minimum. Nothing changed.",
             )
     result = await services.admin.apply_admin_config(
         {

@@ -84,7 +84,7 @@ def row(name, context=1048576, **extra):
 
 
 @pytest.mark.asyncio
-async def test_discovery_filters_paid_and_unknown_models_then_enforces_512k(
+async def test_discovery_filters_paid_and_unknown_models_then_enforces_256k(
     monkeypatch,
 ):
     pool = AutomaticFreePool()
@@ -93,9 +93,9 @@ async def test_discovery_filters_paid_and_unknown_models_then_enforces_512k(
     )
     catalogs = [
         row("large"),
-        row("exact", 512001),
-        row("boundary-excluded", 512000),
-        row("small", 511999),
+        row("exact", 256000),
+        row("boundary-excluded", 255999),
+        row("small", 128000),
         row("unknown", None),
         row("paid", pricing={"prompt": 0, "completion": 1}),
         row("bad-free", pricing={}),
@@ -113,7 +113,8 @@ async def test_discovery_filters_paid_and_unknown_models_then_enforces_512k(
 
     monkeypatch.setattr(pool, "_fetch", fetch)
     status = await pool.status(settings)
-    assert status["minimum_context_tokens"] == 512001
+    assert status["minimum_context_tokens"] == 256000
+    assert status["preferred_context_tokens"] == 512001
     assert status["eligible_models"] == 2
     assert {m.model_id for m in pool._catalog} == {"large", "exact"}
     assert (
@@ -176,14 +177,14 @@ async def test_context_vision_request_fit_and_provider_diversity():
     pool = freeze_pool(
         AutomaticFreePool(),
         [model(name=f"or-{n}") for n in range(25)]
-        + [model("gemini", "vision", vision=True), model("groq", "too-small", 511999)],
+        + [model("gemini", "vision", vision=True), model("groq", "too-small", 255999)],
     )
     settings = Settings()
     selected = await pool.select(
         settings, {"messages": [{"role": "user", "content": "hi"}]}
     )
     assert len(selected) == 12 and selected[1].provider_id == "gemini"
-    assert all(m.context > 512000 for m in selected)
+    assert all(m.context >= 256000 for m in selected)
     selected = await pool.select(
         settings,
         {
@@ -200,7 +201,7 @@ async def test_context_vision_request_fit_and_provider_diversity():
         },
     )
     assert [m.provider_id for m in selected] == ["gemini"]
-    with pytest.raises(ExecutionFailure, match="512,000"):
+    with pytest.raises(ExecutionFailure, match="256,000"):
         await pool.select(settings, {"messages": [{"content": "x" * 2200000}]})
 
 
@@ -393,7 +394,7 @@ async def test_local_context_configuration_cannot_expand_model_capacity(monkeypa
     models, complete = await pool._discover_local(None, Settings(), "ollama")
     assert complete and models[0].context == 131072
     freeze_pool(pool, models)
-    with pytest.raises(ExecutionFailure, match="512,000"):
+    with pytest.raises(ExecutionFailure, match="256,000"):
         await pool.select(Settings(), {"messages": [{"content": "hi"}]})
 
 
@@ -435,7 +436,7 @@ def test_chat_cross_provider_failover_and_shared_cooldown(monkeypatch, stream):
     )
     pool = freeze_pool(
         app.state.free_pool,
-        (model(), model(name="same-quota"), model("gemini", "independent")),
+        (model(), model(name="same-quota"), model("gemini", "independent", 256000)),
     )
     calls = []
 

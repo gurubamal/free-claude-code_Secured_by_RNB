@@ -164,7 +164,7 @@ async def test_outage_is_not_misreported_as_rate_limit(monkeypatch):
         await pool.select(settings, {})
     assert error.value.status_code == 503
     assert "deepseek: temporary model outage" in error.value.message
-    assert "openai: default context at or below 512,000" in error.value.message
+    assert "openai: default context below 256,000" in error.value.message
 
 
 def model(provider, name, billing="paid_api", context=1048576):
@@ -195,9 +195,10 @@ async def test_opt_in_priority_disable_and_context_floor(monkeypatch):
         "commandcode",
         "deepseek",
         "openai",
+        "openai",
         "open_router",
     ]
-    assert all(m.context > 512000 for m in chosen)
+    assert all(m.context >= 256000 for m in chosen)
     pool.record_success(chosen[-1])
     assert (await pool.select(settings, {}))[0].provider_id == "commandcode"
     disabled = settings.model_copy(update={"routing_disabled_providers": "commandcode"})
@@ -258,7 +259,9 @@ def test_free_price_guard_survives_paid_opt_in():
 
 
 @pytest.mark.asyncio
-async def test_connected_catalog_cannot_promote_small_or_unknown_context(monkeypatch):
+async def test_connected_catalog_admits_272k_but_not_small_or_unknown_context(
+    monkeypatch,
+):
     subscriptions = SimpleNamespace(
         identities=AsyncMock(return_value={"openai": "synthetic-account"}),
         discover=AsyncMock(
@@ -267,6 +270,9 @@ async def test_connected_catalog_cannot_promote_small_or_unknown_context(monkeyp
                     "small", context_window_tokens=272000, supports_tools=True
                 ),
                 ProviderModelInfo("unknown", supports_tools=True),
+                ProviderModelInfo(
+                    "too-small", context_window_tokens=255999, supports_tools=True
+                ),
                 ProviderModelInfo(
                     "large", context_window_tokens=512001, supports_tools=True
                 ),
@@ -277,9 +283,9 @@ async def test_connected_catalog_cannot_promote_small_or_unknown_context(monkeyp
     monkeypatch.setattr(pool, "_fetch", AsyncMock(return_value=b"{}"))
     monkeypatch.setattr(pool, "_discover_local", AsyncMock(return_value=([], True)))
     await pool.refresh(Settings(allow_subscription_models=True), force=True)
-    assert [m.model_id for m in pool._catalog] == ["large"]
+    assert {m.model_id for m in pool._catalog} == {"large", "small"}
     report = next(r for r in pool._reports if r["provider"] == "openai")
-    assert report["below_context_minimum"] == 1 and report["catalog_models"] == 3
+    assert report["below_context_minimum"] == 1 and report["catalog_models"] == 4
     await pool.refresh(Settings(), force=True)
     assert not pool._catalog
 

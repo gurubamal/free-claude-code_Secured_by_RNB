@@ -37,7 +37,7 @@ def print_status(data):
     else:
         print("Automatic selection")
     print(
-        "Automatic fallback: always enabled. Required context: more than 512,000 tokens."
+        "Automatic fallback: always enabled. Required context: at least 256,000 tokens; above 512,000 preferred within each billing and health tier."
     )
     print(
         "Billing order: " + " > ".join(map(display, data.get("billing_priority", [])))

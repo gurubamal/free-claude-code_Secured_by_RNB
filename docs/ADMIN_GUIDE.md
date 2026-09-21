@@ -8,7 +8,7 @@ These three screenshots were supplied by the maintainer on **2026-09-20** and ar
 
 Open **Reasoning** in Admin and set **Reasoning Policy** (root) to **Max**. Set Fable, Opus, Sonnet and Haiku to **Max** or **Inherit**, then save. The root choice applies across automatic routing and fallback for all three API interfaces. Lower effort sent by a client cannot override a fixed root policy. Restart a Claude CLI launched through this app to inherit the updated effort display.
 
-Max uses each adapter's supported controls; Inception maps it to `high`. Providers without a supported control keep their defaults. This setting does not change billing permissions, the 512k context minimum, quotas or output limits. Higher reasoning effort can increase token use and latency. See the [reasoning policy](../FREE_ROUTING.md#reasoning-policy).
+Max uses each adapter's supported controls; Inception maps it to `high`. Providers without a supported control keep their defaults. This setting does not change billing permissions, the 256k context minimum, quotas or output limits. Higher reasoning effort can increase token use and latency. See the [reasoning policy](../FREE_ROUTING.md#reasoning-policy).
 
 ## 1. Connections and configured providers
 
@@ -16,19 +16,19 @@ Max uses each adapter's supported controls; Inception maps it to `high`. Provide
 
 **Providers** contains account connections and API-key configuration. Use **Configure** to enter a provider's settings or **Edit** to update saved settings. Enter credentials only in the protected local Admin page.
 
-The screenshot's **378 models available** is the OpenRouter provider catalog count. Automatic free routing applies additional pricing/account, tool-support, context and quota checks. Every selected model and fallback must have more than **512,000 context tokens** and enough room for the request; a catalog count does not establish any of those checks.
+The screenshot's **378 models available** is the OpenRouter provider catalog count. Automatic free routing applies additional pricing/account, tool-support, context and quota checks. Every selected model and fallback must have at least **256,000 context tokens** and enough room for the request; a catalog count does not establish any of those checks.
 
-**OpenAI / ChatGPT** uses the connected-account flow. Enable **Allow connected subscriptions** in Routing controls to permit eligible subscription models. Connecting alone does not enable billing or add free capacity. A catalog with 272k default context is excluded by the 512k rule even when an experimental larger maximum is advertised.
+**OpenAI / ChatGPT** uses the connected-account flow. Enable **Allow connected subscriptions** in Routing controls to permit eligible subscription models. Connecting alone does not enable billing or add free capacity. A model with 272k default context now meets the floor. Experimental larger maxima are not used to admit oversized requests.
 
 ## 2. More cloud-provider settings
 
-**Gemini / Google account** now appears under **OAuth providers**. Choose **Edit** to save your own Google Desktop OAuth client ID, secret and Cloud project ID; then choose **Sign in with Google**. Enable **Allow paid API routes** to include it in automatic routing. Google API quotas/billing apply, and the 512k floor remains. See the [Google account setup guide](GOOGLE_ACCOUNT.md) for the required one-time Google configuration. The historical screenshots below predate this addition.
+**Gemini / Google account** now appears under **OAuth providers**. Choose **Edit** to save your own Google Desktop OAuth client ID, secret and Cloud project ID; then choose **Sign in with Google**. Enable **Allow paid API routes** to include it in automatic routing. Google API quotas/billing apply, and the 256k floor remains. See the [Google account setup guide](GOOGLE_ACCOUNT.md) for the required one-time Google configuration. The historical screenshots below predate this addition.
 
 ![Cloud-provider cards including Gemini, Groq, Kilo, Mistral and NVIDIA NIM, each with a Configure button](images/admin-cloud-providers.png)
 
 Scroll through the cloud providers to find the service whose credentials you want to configure. A visible card means a configuration interface exists; it does not mean that provider is configured, included in the automatic free pool, or currently offers a qualifying model.
 
-**Atria** and **Inception** now have their own **Configure** cards and masked API-key fields. Get an Atria key from [its console](https://api.atria-asi.ai/console), or an Inception key from [its platform](https://platform.inceptionlabs.ai/). Save it in Admin and keep repository files free of credentials. Both integrations require the paid-API switch for routing consideration. As reviewed on 2026-09-20, Atria Dawn Preview has 256k context and Inception Mercury 2.5 has 260k, so neither meets your 512k minimum. Their settings explain that exclusion; a saved key or loaded catalog does not make them selectable. Inception's public catalog is not an authentication check, and key saving does not send a billable test request.
+**Atria** and **Inception** now have their own **Configure** cards and masked API-key fields. Get an Atria key from [its console](https://api.atria-asi.ai/console), or an Inception key from [its platform](https://platform.inceptionlabs.ai/). Save it in Admin and keep repository files free of credentials. Both integrations require the paid-API switch for routing consideration. The documented Atria Dawn Preview limit is 256k and Inception Mercury 2.5 is 260k. Both meet the floor adopted on 2026-09-21; routing still requires paid-API permission, a request that fits and available account capacity. Inception's public catalog is not an authentication check, and key saving does not send a billable test request.
 
 For account-dependent free tiers, save the key, then open **Routing controls** in the sidebar. Confirm that the key belongs to a free account with paid billing disabled. The confirmation binds to that key and must be repeated after a key change. The app relies on this statement for account billing. Without it, these keys are used only as paid access when enabled.
 
@@ -62,7 +62,7 @@ The **Actual gateway route** panel displays the provider/model that completed th
 
 This fourth image is a **synthetic browser test**, distinct from the three supplied screenshots. It illustrates the current controls and is not a record of the maintainer's provider credentials or live route.
 
-Routing can have no available candidates even after a successful connection and catalog load. Eligibility is a catalog/account assessment, not proof of inference. If every eligible route is unavailable, the gateway returns an error and retains the selected billing policy and 512k minimum.
+Routing can have no available candidates even after a successful connection and catalog load. Eligibility is a catalog/account assessment, not proof of inference. If every eligible route is unavailable, automatic recovery waits within its deadline before returning an error; it retains the selected billing policy and 256k minimum.
 
 See [Automatic routing](../FREE_ROUTING.md) for provider and interface limits, [HARDENING.md](../HARDENING.md) for storage/access controls, and [VALIDATION.md](../VALIDATION.md) for dated checks.
 
@@ -74,4 +74,4 @@ Gemini API-key discovery uses Google's native model endpoint, with header authen
 - **SERVICE_DISABLED:** enable the Generative Language API for the intended project in Google Cloud.
 - **API_KEY_INVALID:** replace the key using the protected Gemini **Edit** form with a valid Gemini API key from Google AI Studio.
 
-After resolving access, refresh catalogs. Eligible alternatives remain available to automatic routing while Gemini is excluded. A failure does not enable paid billing or waive the 512k minimum. Google consumer Pro/Ultra access and Gemini Developer API project access remain separate.
+After resolving access, refresh catalogs. Eligible alternatives remain available to automatic routing while Gemini is excluded. A failure does not enable paid billing or waive the 256k minimum. Google consumer Pro/Ultra access and Gemini Developer API project access remain separate.

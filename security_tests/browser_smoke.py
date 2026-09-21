@@ -280,7 +280,7 @@ def main():
                         page.locator(f"#field-{env_key}").get_attribute("type")
                         == "password"
                     )
-                    assert "512k" in page.locator("#providerDialog").inner_text()
+                    assert "256k" in page.locator("#providerDialog").inner_text()
                     page.locator("#cancelProviderDialog").click()
                 checks.append(
                     "Chrome Atria and Inception cards, masked keys and context-limit notes"
@@ -391,7 +391,8 @@ def main():
                             "available_free_routes": [],
                         }
                     ],
-                    "minimum_context_tokens": 512001,
+                    "minimum_context_tokens": 256000,
+                    "preferred_context_tokens": 512001,
                     "refreshed_at": "2026-09-20T08:00:00+00:00",
                     "eligible_models": 2,
                     "health_ttl_seconds": 900,

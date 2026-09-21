@@ -496,7 +496,7 @@ async def test_google_oauth_is_paid_api_not_subscription_and_keeps_context_floor
                     "large", context_window_tokens=1048576, supports_tools=True
                 ),
                 ProviderModelInfo(
-                    "small", context_window_tokens=272000, supports_tools=True
+                    "small", context_window_tokens=255999, supports_tools=True
                 ),
                 ProviderModelInfo("unknown", supports_tools=True),
             )

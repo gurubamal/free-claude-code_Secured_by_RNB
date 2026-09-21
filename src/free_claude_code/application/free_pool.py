@@ -16,7 +16,10 @@ import httpx
 
 from free_claude_code.application.route_budget import current_route_budget
 from free_claude_code.application.route_health import VERIFIED_TTL_SECONDS, RouteHealth
-from free_claude_code.config.free_mode import MIN_CONTEXT_TOKENS
+from free_claude_code.config.free_mode import (
+    MIN_CONTEXT_TOKENS,
+    PREFERRED_CONTEXT_TOKENS,
+)
 from free_claude_code.config.free_model_preferences import (
     FREE_MODEL_FAMILIES,
     free_model_family,
@@ -840,6 +843,7 @@ class AutomaticFreePool:
             models.sort(
                 key=lambda m: (
                     self.health_rank(settings, m),
+                    (m.context or 0) < PREFERRED_CONTEXT_TOKENS,
                     free_preference_rank(m.model_id, preferences)
                     if billing == "free"
                     else 0,
@@ -868,6 +872,7 @@ class AutomaticFreePool:
                 [m for row in zip_longest(*groups) for m in row if m is not None],
                 key=lambda m: (
                     self.health_rank(settings, m),
+                    (m.context or 0) < PREFERRED_CONTEXT_TOKENS,
                     free_preference_rank(m.model_id, preferences)
                     if billing == "free"
                     else 0,
@@ -892,8 +897,8 @@ class AutomaticFreePool:
         for index, category in enumerate(categories):
             budget = 12 - len(ordered) - (len(categories) - index - 1)
             ordered.extend(reserve_provider_candidates(category, budget))
-        # Recent verified health precedes family preference. Stable sorting keeps
-        # provider rotation within each health and preference tier.
+        # Recent verified health precedes context and family preference. Stable
+        # sorting keeps provider rotation within each tier and billing category.
         if not ordered:
             active = [
                 entry
@@ -923,7 +928,7 @@ class AutomaticFreePool:
                     or settings.allow_subscription_models
                     else "free"
                 )
-                + " provider with more than 512,000 context tokens is currently available for this request."
+                + f" provider with at least {MIN_CONTEXT_TOKENS:,} context tokens and enough room for this request is currently available."
                 + detail
                 + self.availability_summary(settings)
                 + " Open Admin > Routing controls for credentials, priority, capabilities and cooldowns."
@@ -974,7 +979,9 @@ class AutomaticFreePool:
             if reasons:
                 details.append(provider + ": " + ", ".join(sorted(reasons)))
             elif report.get("below_context_minimum"):
-                details.append(provider + ": default context at or below 512,000")
+                details.append(
+                    provider + f": default context below {MIN_CONTEXT_TOKENS:,}"
+                )
             elif report["state"] == "CONFIRM_FREE_ACCOUNT":
                 details.append(provider + ": free-account confirmation missing")
             elif report["state"].startswith("DISCOVERY_"):
@@ -1229,6 +1236,7 @@ class AutomaticFreePool:
                 for kind in ("free", "subscription", "paid_api")
             },
             "minimum_context_tokens": MIN_CONTEXT_TOKENS,
+            "preferred_context_tokens": PREFERRED_CONTEXT_TOKENS,
             "reasoning_policy": settings.reasoning_policy.value,
             "health_ttl_seconds": VERIFIED_TTL_SECONDS,
             "verified_free_routes": [
@@ -1252,5 +1260,5 @@ class AutomaticFreePool:
             "last_success_details": self._last_success_details,
             "latest_attempt": self._last_attempt,
             "providers": rows,
-            "note": "Eligible means catalog and enabled billing-policy checks passed; it is not a successful inference guarantee. Free-account tiers rely on your acknowledgment. Paid APIs and subscriptions may consume allowance or purchased credits. This gateway has no monetary budget cap; configure spending controls with each provider. Every route requires more than 512,000 context tokens.",
+            "note": "Eligible means catalog and enabled billing-policy checks passed; it is not a successful inference guarantee. Free-account tiers rely on your acknowledgment. Paid APIs and subscriptions may consume allowance or purchased credits. This gateway has no monetary budget cap; configure spending controls with each provider. Every route requires at least 256,000 context tokens and room for the request. Within each billing and health tier, models above 512,000 tokens are preferred. A saved manual choice remains first when eligible.",
         }
