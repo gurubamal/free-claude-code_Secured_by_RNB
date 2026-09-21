@@ -64,8 +64,10 @@ async def test_fallback_must_fit_entire_request_without_truncation(context):
     payload = {"messages": [{"role": "user", "content": "x" * (2 * context)}]}
     assert await pool.select(Settings(), payload) == (large,)
     pool._catalog = (small,)
-    with pytest.raises(ExecutionFailure, match="enough room"):
+    with pytest.raises(ExecutionFailure, match="Estimated request capacity") as error:
         await pool.select(Settings(), payload)
+    assert error.value.status_code == 400
+    assert not error.value.recovery_safe
     assert len(payload["messages"][0]["content"]) == 2 * context
 
 

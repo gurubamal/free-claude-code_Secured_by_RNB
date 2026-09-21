@@ -64,6 +64,8 @@ This fourth image is a **synthetic browser test**, distinct from the three suppl
 
 Routing can have no available candidates even after a successful connection and catalog load. Eligibility is a catalog/account assessment, not proof of inference. If every eligible route is unavailable, automatic recovery waits within its deadline before returning an error; it retains the selected billing policy and 256k minimum.
 
+If Claude stays on **Compacting conversation**, check **Actual gateway route** and **Automatic capacity recovery**. Compaction also needs a fitting model. The gateway estimates readable reasoning separately from replay signatures and uses an image token reserve for screenshots, without changing saved history. A request larger than every compatible catalog model returns a context-size error immediately. After updating a gateway, cancel an old pending operation and resume the saved Claude session to retry; a restart does not complete requests held by the old process.
+
 See [Automatic routing](../FREE_ROUTING.md) for provider and interface limits, [HARDENING.md](../HARDENING.md) for storage/access controls, and [VALIDATION.md](../VALIDATION.md) for dated checks.
 
 ## Gemini catalog access errors

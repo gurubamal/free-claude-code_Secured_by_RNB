@@ -14,6 +14,7 @@ from urllib.parse import urlencode, urljoin, urlsplit
 
 import httpx
 
+from free_claude_code.application.request_capacity import estimated_input_capacity
 from free_claude_code.application.route_budget import current_route_budget
 from free_claude_code.application.route_health import VERIFIED_TTL_SECONDS, RouteHealth
 from free_claude_code.config.free_mode import (
@@ -105,12 +106,12 @@ def local_base(settings, provider_id):
 
 
 def request_needs(payload):
-    # Conservative byte estimate; provider tokenizers may still reject a request.
-    raw = json.dumps(payload, ensure_ascii=False, default=str)
+    # Count model input, not encoded replay signatures or base64 image bytes.
+    # Provider tokenizers may still reject a request; never truncate its history.
+    input_capacity, vision = estimated_input_capacity(payload)
     maximum = payload.get("max_tokens", payload.get("max_output_tokens", 8192))
     output = min(positive_int(maximum) or 8192, 8192)
-    context = len(raw.encode("utf-8")) // 2 + output
-    vision = bool(re.search(r'"(?:type)"\s*:\s*"(?:image|image_url|input_image)"', raw))
+    context = input_capacity + output
     return context, bool(payload.get("tools")), vision
 
 
@@ -808,19 +809,31 @@ class AutomaticFreePool:
         attempt_budget = current_route_budget()
         context, tools, vision = request_needs(payload)
         disabled = set((settings.routing_disabled_providers or "").split(","))
-        eligible = [
+        compatible = [
             m
             for m in self._catalog
-            if not self.cooldown(settings, m)
-            and (attempt_budget is None or attempt_budget.allows(m.provider_id))
-            and m.provider_id not in disabled
+            if m.provider_id not in disabled
             and (m.billing != "subscription" or settings.allow_subscription_models)
             and (m.billing != "paid_api" or settings.allow_paid_api_models)
             and (payload.get("_fcc_wire_api") != "chat" or m.billing != "subscription")
             and (not tools or m.tools)
             and (not vision or m.vision)
             and m.context is not None
-            and m.context >= max(context, MIN_CONTEXT_TOKENS)
+            and m.context >= MIN_CONTEXT_TOKENS
+        ]
+        if compatible and all(m.context < context for m in compatible):
+            raise ExecutionFailure(
+                FailureKind.CONTEXT_WINDOW_EXCEEDED,
+                400,
+                f"Estimated request capacity ({context:,} tokens including output) exceeds every compatible enabled model in the current catalog. Compact the conversation or reduce large tool results before retrying; waiting for quota cannot shrink this request.",
+                False,
+            )
+        eligible = [
+            m
+            for m in compatible
+            if m.context >= context
+            and not self.cooldown(settings, m)
+            and (attempt_budget is None or attempt_budget.allows(m.provider_id))
         ]
         groups_by_billing = {kind: [] for kind in settings.routing_priority.split(",")}
         preferences = preferred_free_families(settings.free_model_priority)
