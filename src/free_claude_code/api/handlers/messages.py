@@ -273,6 +273,7 @@ class MessagesHandler:
         return terminal_execution_error_response(
             status_code=failure.status_code,
             content=anthropic_failure_payload(failure, request_id=request_id),
+            recovery_safe=failure.recovery_safe,
         )
 
     def _unexpected_execution_error_response(

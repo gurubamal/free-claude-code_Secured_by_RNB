@@ -11,6 +11,8 @@
 <h2 id="activityTitle">Actual gateway route</h2>
 <h3>Last successful route</h3><p id="lastRoute">No successful request recorded since server restart.</p>
 <h3>Latest attempt</h3><p id="latestAttempt">No attempt recorded since server restart.</p>
+<h3>Automatic capacity recovery</h3><p id="capacityRecovery" role="status">Loading recovery status…</p>
+<small>A failure moves to the next eligible provider immediately. After three failures, that provider is skipped for the rest of this request, including recovery retries. Billing rejections block the affected billing route immediately; temporary errors do not prove an API is paid. When all routes fail before output, a connected request can wait up to 15 minutes. Streaming clients receive keepalives. Cancel or disconnect to stop. Waiting requests stay in memory and do not survive a gateway restart. Provider cooldowns, billing permissions and the context minimum remain in force.</small>
 <p id="activityUpdated" role="status"></p>
 <small>Updates every 10 seconds while this page is visible. This shows gateway records across connected clients. The CLI model label can be a fixed alias. An attempt is not proof of completed output; an interrupted connection may remain the latest attempt.</small>
 </section>
@@ -69,6 +71,8 @@ function renderHealth(data){
 }
 function describeRoute(route){return route.provider+' / '+route.model+' · '+route.billing.replaceAll('_',' ')+' · '+route.context_tokens.toLocaleString()+' context tokens · '+route.state+(route.status_code?' (HTTP '+route.status_code+')':'')+' · '+new Date(route.finished_at||route.started_at).toLocaleString()}
 function renderActivity(data){
+ const recovery=data.recovery;
+ el('capacityRecovery').textContent=recovery?(recovery.enabled?'Enabled':'Disabled')+' · '+recovery.waiting_requests+' request(s) waiting · route check every '+recovery.check_seconds+' seconds · shared catalog/capacity check every '+recovery.catalog_refresh_seconds+' seconds':'Recovery status unavailable.';
  el('lastRoute').textContent=data.last_success_details?describeRoute(data.last_success_details):data.last_success||'No successful request recorded since server restart.';
  el('latestAttempt').textContent=data.latest_attempt?describeRoute(data.latest_attempt):'No attempt recorded since server restart.';
  el('activityUpdated').textContent='Route status checked '+new Date().toLocaleTimeString();

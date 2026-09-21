@@ -31,6 +31,7 @@ from free_claude_code.core.version import package_version
 from .admin_accounts import AdminSessionMiddleware
 from .admin_cache import AdminNoStoreMiddleware, attach_admin_no_store
 from .admin_routes import router as admin_router
+from .capacity_recovery import CapacityRecovery
 from .code_sessions_routes import router as code_router
 from .free_chat_routes import router as free_chat_router
 from .free_pool_routes import router as free_pool_router
@@ -51,6 +52,10 @@ def create_app(services: ApiServices) -> FastAPI:
     app = FastAPI(title="Claude Code Proxy", version=package_version())
     app.state.services = services
     app.state.free_pool = AutomaticFreePool(subscriptions=SubscriptionCatalog(services))
+    app.state.capacity_recovery = CapacityRecovery(
+        app.state.free_pool, services.requests.current_settings
+    )
+    app.state.free_pool.recovery_status = app.state.capacity_recovery.status
     app.add_middleware(AdminNoStoreMiddleware)
     app.add_middleware(ClientRequestLifetimeMiddleware)
     app.add_middleware(RequestCorrelationMiddleware)

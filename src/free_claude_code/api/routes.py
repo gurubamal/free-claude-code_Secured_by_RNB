@@ -130,12 +130,16 @@ async def create_message(
     _auth=Depends(require_anthropic_proxy_auth),
 ):
     """Create a message (JSON by default; stream=true returns Anthropic SSE)."""
-    return await _create_messages_response(
-        services,
-        request_data,
-        request_id=get_request_id(request),
-        request_headers=request.headers,
-        free_pool=request.app.state.free_pool,
+    return await request.app.state.capacity_recovery.respond(
+        lambda: _create_messages_response(
+            services,
+            request_data.model_copy(deep=True),
+            request_id=get_request_id(request),
+            request_headers=request.headers,
+            free_pool=request.app.state.free_pool,
+        ),
+        stream=request_data.stream,
+        wire="messages",
     )
 
 
@@ -152,12 +156,16 @@ async def create_response(
     _auth=Depends(require_proxy_auth),
 ):
     """Create an OpenAI Responses-compatible response through this proxy."""
-    return await _create_responses_response(
-        services,
-        request_data,
-        request_id=get_request_id(request),
-        request_headers=request.headers,
-        free_pool=request.app.state.free_pool,
+    return await request.app.state.capacity_recovery.respond(
+        lambda: _create_responses_response(
+            services,
+            request_data.model_copy(deep=True),
+            request_id=get_request_id(request),
+            request_headers=request.headers,
+            free_pool=request.app.state.free_pool,
+        ),
+        stream=True,
+        wire="responses",
     )
 
 

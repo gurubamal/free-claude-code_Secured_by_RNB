@@ -165,7 +165,7 @@ async def test_actual_messages_provider_does_not_retry_daily_quota(
 
 
 @pytest.mark.parametrize("stream", [False, True])
-def test_chat_daily_quota_sends_one_request_and_stops(monkeypatch, stream):
+def test_chat_daily_quota_returns_error_when_recovery_slots_full(monkeypatch, stream):
     from free_claude_code.api import free_chat_routes
 
     requests, responses, closed = [], [], []
@@ -200,6 +200,9 @@ def test_chat_daily_quota_sends_one_request_and_stops(monkeypatch, stream):
     from free_helpers import freeze_pool, model
 
     app = create_app(services)
+    # The bounded recovery queue still exposes the original terminal HTTP error
+    # when full; never retry the provider inside a quota-blocked attempt.
+    app.state.capacity_recovery.max_waiting = 0
     freeze_pool(app.state.free_pool, [model("open_router", "openrouter/free")])
     with TestClient(app) as client:
         response = client.post(

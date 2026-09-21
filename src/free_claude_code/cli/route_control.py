@@ -43,6 +43,20 @@ def print_status(data):
         "Billing order: " + " > ".join(map(display, data.get("billing_priority", [])))
     )
     last = data.get("last_success_details")
+    recovery = data.get("recovery")
+    if recovery:
+        print(
+            "Automatic recovery: "
+            + display(recovery.get("waiting_requests", 0))
+            + " waiting; connected requests wait up to "
+            + display(recovery.get("max_wait_seconds", 0))
+            + " seconds before returning a terminal error."
+        )
+        print(
+            "Provider failure limit: "
+            + display(recovery.get("provider_failure_limit", 3))
+            + " per request, including recovery retries; failures rotate to the next eligible provider."
+        )
     if last:
         print(
             "Last successful route: "

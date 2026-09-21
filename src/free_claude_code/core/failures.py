@@ -37,6 +37,7 @@ class ExecutionFailure(Exception):
     retry_after_seconds: float | None = None
     provider_access_blocked: bool = False
     billing_limit: BillingLimit | None = None
+    recovery_safe: bool = False
 
     def __post_init__(self) -> None:
         Exception.__init__(self, self.message)

@@ -179,4 +179,5 @@ class ResponsesHandler:
         return terminal_execution_error_response(
             status_code=failure.status_code,
             content=openai_failure_payload(failure),
+            recovery_safe=failure.recovery_safe,
         )
