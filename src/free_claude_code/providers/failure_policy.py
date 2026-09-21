@@ -12,6 +12,7 @@ import httpx2
 import openai
 
 from free_claude_code.core.anthropic.errors import anthropic_status_for_error_type
+from free_claude_code.core.billing_limits import openrouter_billing_from_error
 from free_claude_code.core.diagnostics import (
     attached_upstream_error_body,
     extract_upstream_error_detail,
@@ -90,6 +91,17 @@ def classify_provider_failure(
         if request_id_line and request_id_line not in message:
             message = f"{message}\n\n{request_id_line}"
         return replace(failure, message=message)
+
+    billing_failure = openrouter_billing_from_error(provider_name, exc)
+    if billing_failure is not None:
+        return replace(
+            billing_failure,
+            message=billing_failure.message
+            + (f"\n\nRequest ID: {request_id}" if request_id else ""),
+            retry_after_seconds=retry_seconds(
+                getattr(getattr(exc, "response", None), "headers", None)
+            ),
+        )
 
     access_failure = plan_access_failure(
         provider_name,
