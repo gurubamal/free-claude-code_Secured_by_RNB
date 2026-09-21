@@ -4,8 +4,9 @@ from copy import deepcopy
 
 FREE_MODEL = "openrouter/free"
 FREE_MODEL_REF = "open_router/" + FREE_MODEL
-# "Above 512k" is exclusive; context counts are whole tokens.
-MIN_CONTEXT_TOKENS = 512001
+# Decimal tokens: 256k is inclusive; above 512k is a preference, not a gate.
+MIN_CONTEXT_TOKENS = 256000
+PREFERRED_CONTEXT_TOKENS = 512001
 
 
 def free_request_body(body: dict, *, model: str = FREE_MODEL) -> dict:

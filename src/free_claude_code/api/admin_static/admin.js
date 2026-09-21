@@ -397,9 +397,9 @@ function updateProviderCard(provider) {
     const paidApi = provider.automatic_routing_policy === 'paid_api';
     const enabled = subscription ? state.config.allow_subscription_models : paidApi ? state.config.allow_paid_api_models : false;
     policyNote.textContent = enabled
-      ? 'Allowed for automatic routing when a tool-capable model above 512k and account capacity are available. Account charges or credits may apply.'
+      ? 'Allowed for automatic routing when a tool-capable model of at least 256k and account capacity are available. Account charges or credits may apply.'
       : subscription || paidApi
-        ? 'Catalog discovery is available. Enable ' + (subscription ? 'connected subscriptions' : 'paid APIs') + ' in Routing controls to allow eligible models above 512k; account charges or credits may apply.'
+        ? 'Catalog discovery is available. Enable ' + (subscription ? 'connected subscriptions' : 'paid APIs') + ' in Routing controls to allow eligible models of at least 256k; account charges or credits may apply.'
         : 'Catalog discovery only. This provider is not included in automatic routing.';
     card.insertBefore(policyNote, actions);
     if (subscription || paidApi) {

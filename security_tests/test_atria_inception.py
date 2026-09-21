@@ -142,19 +142,19 @@ async def test_paid_opt_in_and_context_floor_preserved(monkeypatch, provider_id)
     monkeypatch.setattr(pool, "_fetch", fetch)
     monkeypatch.setattr(pool, "_discover_local", AsyncMock(return_value=([], True)))
     await pool.refresh(settings, force=True)
-    assert not pool._catalog
+    assert len(pool._catalog) == 1 and pool._catalog[0].billing == "paid_api"
     report = next(r for r in pool._reports if r["provider"] == provider_id)
-    assert report["state"] == "NO_ELIGIBLE_MODELS"
-    assert report["below_context_minimum"] == 1
-    # A future primary-catalog entry can qualify without weakening the floor.
+    assert report["state"] == "ELIGIBLE"
+    assert report["below_context_minimum"] == 0
+    # Smaller entries still fail the floor even with paid permission enabled.
     row = {
         "id": "synthetic-future-chat",
-        "context_length": 512001,
+        "context_length": 255999,
         "max_output_length": 8192,
         "supported_features": ["tools"],
     }
     await pool.refresh(settings, force=True)
-    assert len(pool._catalog) == 1 and pool._catalog[0].billing == "paid_api"
+    assert not pool._catalog
     await pool.refresh(
         settings.model_copy(update={"allow_paid_api_models": False}), force=True
     )

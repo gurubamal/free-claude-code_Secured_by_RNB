@@ -115,7 +115,7 @@ _NON_PROVIDER_FIELDS: tuple[ConfigFieldSpec, ...] = (
         "models",
         "boolean",
         settings_attr="allow_subscription_models",
-        description="Opt in to connected ChatGPT/Copilot allowance or credits. Account limits and charges apply. Every route still requires more than 512k context.",
+        description="Opt in to connected ChatGPT/Copilot allowance or credits. Account limits and charges apply. Every route requires at least 256k context and room for the request.",
     ),
     ConfigFieldSpec(
         "ALLOW_PAID_API_MODELS",
@@ -137,7 +137,7 @@ _NON_PROVIDER_FIELDS: tuple[ConfigFieldSpec, ...] = (
         "Preferred free model order",
         "models",
         settings_attr="free_model_priority",
-        description="Free routes only: deepseek-v4.1-flash,kimi-k3,qwen3.8-max,glm-5.3-flash. Reorder or remove families; use none to disable preferences. Within each health tier, preferred models precede provider order and last success; other eligible free models follow. Requires live free eligibility, tools and more than 512k context.",
+        description="Free routes only: deepseek-v4.1-flash,kimi-k3,qwen3.8-max,glm-5.3-flash. Reorder or remove families; use none to disable preferences. Within each health and context tier, preferred models precede provider order and last success; other eligible free models follow. Requires live free eligibility, tools and at least 256k context; above 512k is preferred within each health tier.",
     ),
     ConfigFieldSpec(
         "ROUTING_PROVIDER_PRIORITY",

@@ -370,7 +370,7 @@ async def test_budget_failure_does_not_enable_paid_routes_or_relax_context():
         AutomaticFreePool(),
         [
             model("open_router", "paid"),
-            FreeModel("kilo", "small:free", 512000, 8192, True, False, "zero_price"),
+            FreeModel("kilo", "small:free", 255999, 8192, True, False, "zero_price"),
         ],
     )
     with pytest.raises(ExecutionFailure) as caught:

@@ -56,7 +56,7 @@ def read_model_catalog(
         model = CatalogModel(
             wire_slug=ref,
             provider_model_ref=ref,
-            display_name="Automatic models (above 512k context)",
+            display_name="Automatic models (256k minimum; above 512k preferred)",
             supports_reasoning=None,
             context_window_tokens=MIN_CONTEXT_TOKENS,
             max_output_tokens=8192,

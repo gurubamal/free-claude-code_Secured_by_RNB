@@ -140,8 +140,8 @@ def app_with_storage():
         ("responses", "openai", "subscription"),
     ],
 )
-@pytest.mark.parametrize("preferred_context", [None, 512000])
-async def test_unpreferred_model_falls_back_only_above_512k(
+@pytest.mark.parametrize("preferred_context", [None, 255999])
+async def test_unpreferred_model_falls_back_at_256k_minimum(
     wire, provider, billing, preferred_context
 ):
     pool = AutomaticFreePool()
@@ -149,7 +149,7 @@ async def test_unpreferred_model_falls_back_only_above_512k(
     preferred = model(
         provider, "deepseek-v4.1-flash", billing, context=preferred_context
     )
-    available = model(provider, "another-catalog-model", billing, context=512001)
+    available = model(provider, "another-catalog-model", billing, context=256000)
     pool._catalog = (preferred, available)
     settings = Settings(
         allow_paid_api_models=True,
@@ -161,11 +161,11 @@ async def test_unpreferred_model_falls_back_only_above_512k(
     assert await pool.select(settings, {"_fcc_wire_api": wire}) == (available,)
 
 
-def test_manual_selection_rejects_exactly_512k_and_accepts_above_it():
+def test_manual_selection_rejects_below_256k_and_accepts_exactly_it():
     app, store, settings = app_with_storage()
     app.state.free_pool._catalog = (
-        model("open_router", "boundary:free", context=512000),
-        model("open_router", "above:free", context=512001),
+        model("open_router", "boundary:free", context=255999),
+        model("open_router", "above:free", context=256000),
     )
     headers = {
         "Authorization": "Bearer " + settings.proxy_auth_token,
