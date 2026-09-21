@@ -627,10 +627,15 @@ class ApplicationRuntime:
     async def test_provider(self, provider_id: str) -> JsonObject:
         result = await self.provider_manager.refresh_provider(provider_id)
         if result.failed_provider_ids:
+            # Catalog errors contain only allowlisted local diagnostics, never
+            # arbitrary upstream exception text or account metadata.
+            detail = self.provider_manager.catalog_status()["provider_errors"].get(
+                provider_id
+            )
             return {
                 "provider_id": provider_id,
                 "ok": False,
-                "message": _PROVIDER_CHECK_FAILURE_MESSAGE,
+                "message": detail or _PROVIDER_CHECK_FAILURE_MESSAGE,
             }
         return {
             "provider_id": provider_id,

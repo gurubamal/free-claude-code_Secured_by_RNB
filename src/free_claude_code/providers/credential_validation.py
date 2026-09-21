@@ -14,6 +14,7 @@ import httpx
 
 from free_claude_code.config.provider_catalog import PROVIDER_CATALOG
 from free_claude_code.config.settings import Settings
+from free_claude_code.core.agentrouter_errors import agentrouter_access_message
 from free_claude_code.core.google_errors import google_access_message
 from free_claude_code.core.json_types import JsonValue
 from free_claude_code.providers.runtime.config import string_setting
@@ -77,6 +78,10 @@ _MODELS = _list_field("data")
 # https://router.bynara.id/id/docs
 # https://platform.experientiallabs.ai/docs/authentication
 _PROBES = (
+    # The /models endpoint currently enforces client authorization as well as
+    # account access. Its 401 alone is not proof of an invalid key.
+    # https://github.com/agentrouter-org/docs/issues/21
+    _Probe("agentrouter", "/models", _MODELS),
     _Probe(
         "open_router",
         "/key",
@@ -197,6 +202,14 @@ def _interpret(key: str, probe: _Probe, response: httpx.Response) -> CredentialC
         return _unverified(
             key, "Could not verify this key: unexpected provider response."
         )
+    if probe.provider_id == "agentrouter":
+        if message := agentrouter_access_message(payload, response.status_code):
+            return _unverified(key, message)
+        if response.is_success and probe.accepts(payload):
+            return _unverified(
+                key,
+                "AgentRouter catalog is accessible. Inference access and account capacity are not yet verified.",
+            )
     if response.is_success and probe.accepts(payload):
         if (
             probe.provider_id == "deepseek" and _field(payload, "is_available") is False

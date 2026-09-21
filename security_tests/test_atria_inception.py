@@ -191,7 +191,7 @@ async def test_unknown_atria_version_is_not_given_documented_context(monkeypatch
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("provider_id", ROWS)
+@pytest.mark.parametrize("provider_id", ("atria", "inception"))
 async def test_key_fields_are_secret_and_catalog_is_not_authentication(provider_id):
     descriptor = PROVIDER_CATALOG[provider_id]
     field = FIELD_BY_KEY[descriptor.credential_env]
